@@ -67,8 +67,11 @@ rscat -c     # 或输入 exit,退出会话
 
 > **为什么 `fastfetch | rscat` 看不到图片?**
 > **Why no images with `fastfetch | rscat`?**
-> 管道里出不来图片是 fastfetch 的限制:stdout 非 tty 时它根本不发送图片数据,任何过滤器都变不出来。请用 `rscat -e fastfetch`(伪终端模式,fastfetch 以为在真终端里,照常发图片)。
-> That's a fastfetch limitation: it never emits image data to a non-tty, so no filter can conjure it. Use `rscat -e fastfetch` (PTY mode — fastfetch believes it's on a real terminal and emits images).
+> 管道里出不来图片是 fastfetch 的限制:stdout 非 tty 时它根本不发送图片数据(**实测**:连 `--kitty`/`--kitty-direct` 强制指定也只出 ASCII,0 字节 APC;且 fastfetch 没有 `--force-tty` 之类的开关),任何过滤器都变不出来。请用 `rscat -e fastfetch`(伪终端模式,fastfetch 以为在真终端里,照常发图片)。
+> That's a fastfetch limitation: it never emits image data to a non-tty (**verified**: even forced `--kitty`/`--kitty-direct` yield ASCII-only, 0 APC bytes; no `--force-tty` switch exists), so no filter can conjure it. Use `rscat -e fastfetch` (PTY mode — fastfetch believes it's on a real terminal and emits images).
+
+> **fastfetch logo 类型建议:用 `kitty`,别用 `kitty-direct`**(血泪结论,见下)。
+> **fastfetch logo type: prefer `kitty` over `kitty-direct`** (hard-won, see below).
 
 选项与 lolcat 相同(`-p/-F/-S/--animate/-d/-s/-i/-t/-f`),另加 `-e/--exec`、`-a/--always`、`-c/--cancel`、`--proto`、`--image`、`--init`、`--lang`。完整多语言帮助见 `rscat -h`。
 Same options as lolcat plus rscat extras. Full multilingual help: `rscat -h`.
@@ -91,8 +94,10 @@ Same options as lolcat plus rscat extras. Full multilingual help: `rscat -h`.
 
 ## 与前身差异 Differences from nyacat (Python)
 
-1. **修了 `-c` 排版散架 bug**(截图里的症状):根因是运行模式对子伪终端和用户终端用了 `setraw()`,关掉了 `ONLCR`,子进程写的裸 `\n` 不再回车,fastfetch 的图片定位全乱。现改为:子端保持 cooked 只关 `ECHO`,用户端只关 `ICANON/ECHO` 保留 `OPOST/ONLCR`,并经假终端 oracle 验证版面与直连一致。
-   **Fixed the `-c` layout corruption** (the screenshot): run mode applied `setraw()` to both slave and user tty, killing `ONLCR`, so bare `\n` never carriage-returned and fastfetch's image layout fell apart. Now: slave stays cooked minus `ECHO`, user tty loses only `ICANON/ECHO`; verified layout-identical via a fake-terminal oracle.
+1. **修了 `-c`/`-e` 图片文字错位 bug**(两张截屏的症状),分两层:
+   - **termios 层**:运行模式曾对子伪终端和用户终端用 `setraw()`,关掉 `ONLCR`,裸 `\n` 不回车致楼梯式散架。现子端保持 cooked 只关 `ECHO`,用户端只关 `ICANON/ECHO`。
+   - **协议层**(真凶):`kitty-direct` 传的是**文件路径**,fastfetch 必须发 `\x1b[6n` 查光标才知道图片占了几行;而 fastfetch 只等 **50–100ms**(实测阈值),经代理转发的应答稍慢就超时回退,文字掉到图片下方。改用 `kitty` 类型后传的是 **RGBA+zlib 内联数据**,fastfetch 用确定性 `\x1b[15A` cursor-up 排版,**零终端查询、零竞态**,经任何代理版面都不散。
+   **Fixed the image/text misalignment in two layers**: (1) termios — `setraw()` killed `ONLCR` causing staircase; now cooked-minus-ECHO / cbreak-input-only. (2) protocol (the real culprit) — `kitty-direct` transmits a *file path* so fastfetch must query the cursor (`\x1b[6n`) to learn the image height, but only waits **~50–100ms** (measured); a slightly-slow proxied answer times out and text falls below the image. The `kitty` type sends *inline RGBA+zlib* with deterministic `\x1b[15A` layout — **zero queries, zero race**, stable through any proxy.
 2. **修了 `--animate` 必崩 bug**:Python 版 `self.line = bytearray()` 却 `append((run, char))`,一用就 `TypeError`。Rust 版正常实现。
    **Fixed `--animate` always crashing** (bytearray.append(tuple) TypeError). Implemented correctly in Rust.
 3. `-a` 会话/`-c` 取消是新增功能(Python 版没有);`-e` 取代 Python 版 `-c`(因 `-c` 已给“取消”);`--animate` 因此只有长选项。
