@@ -1,0 +1,39 @@
+rscat 0.1.0 —— 能输出图片的 lolcat(Rust 重写)
+彩虹算法与 lolcat 100.0.1 逐字节一致,另支持图片直通与伪终端运行模式。
+
+用法:
+  somecmd | rscat                 过滤模式:彩虹化 stdin(等价 lolcat)
+  rscat FILE...                   彩虹化文本文件
+  rscat -e fastfetch              运行模式:伪终端里跑命令,图片+彩虹字兼得
+  rscat -e fish -e f              运行模式也能包 shell 函数
+  rscat neko.png [mimi.jpg ...]   图片模式:直接显示图片+彩虹文件名
+  rscat -a                        彩虹会话:之后所有命令输出都是彩虹色
+  rscat -c                        取消彩虹会话
+  rscat --init fish >> ~/.config/fish/config.fish   shell 集成片段
+
+选项(与 lolcat 相同):
+  -p, --spread F    彩虹宽度(默认 3.0)
+  -F, --freq F      彩虹频率(默认 0.1)
+  -S, --seed N      彩虹种子,0=随机(默认 0)
+  --animate         霓虹闪烁动画
+  -d, --duration N  动画帧数(默认 12)
+  -s, --speed F     动画帧率(默认 20.0)
+  -i, --invert      前景/背景反转
+  -t, --truecolor   强制 24 位色(默认按 COLORTERM 自动检测,否则 256 色)
+  -f, --force       stdout 非终端时也强制上色(否则原样直通,同 lolcat)
+
+rscat 附加:
+  -e, --exec CMD...   运行模式:在伪终端里跑 CMD 并彩虹化其输出(可省 -e 直接写 -- CMD)
+  -a, --always        进入彩虹会话(之后所有命令彩虹输出,exit 或 -c 退出)
+  -c, --cancel        取消彩虹会话
+  --proto P           图片协议 auto|kitty|iterm(默认 auto)
+  -q, --quiet         图片模式下不打印文件名
+  --image             强制按图片处理文件参数
+  --init SHELL        输出 shell 集成片段(bash|zsh|sh|fish|powershell|cmd)
+  --lang L            界面语言 zh-CN|zh-TW|en|ja(默认跟系统 LANG)
+  -h, --help          显示本帮助
+  -V, --version       显示版本
+
+说明:管道里出不来图片是 fastfetch 的限制(非 tty 就不发图片),
+请用 rscat -e fastfetch(本体 -e 旗标,无需另装包装命令)。
+语言:简中/繁中/英文/日文自动跟随系统,也可用 --lang 或 RSCAT_LANG 指定。

@@ -1,0 +1,39 @@
+rscat 0.1.0 —— 画像も出せる lolcat(Rust による書き直し)
+虹アルゴリズムは lolcat 100.0.1 とバイト単位で互換、
+画像パススルーと疑似端末実行モードを追加。
+
+使い方:
+  somecmd | rscat                 フィルタモード:stdin を虹色化(lolcat 相当)
+  rscat FILE...                   テキストファイルを虹色化
+  rscat -e fastfetch              実行モード:pty 内で実行し画像+虹文字を両立
+  rscat neko.png [mimi.jpg ...]   画像モード:画像を直接表示+虹色のファイル名
+  rscat -a                        虹セッション:以降すべての出力が虹色に
+  rscat -c                        虹セッションを解除
+  rscat --init fish >> ~/.config/fish/config.fish   シェル統合スニペット
+
+オプション(lolcat と同じ):
+  -p, --spread F    虹の幅(既定 3.0)
+  -F, --freq F      虹の周波数(既定 0.1)
+  -S, --seed N      虹のシード、0=ランダム(既定 0)
+  --animate         ネオンフリッカーアニメ
+  -d, --duration N  アニメのフレーム数(既定 12)
+  -s, --speed F     アニメのフレームレート(既定 20.0)
+  -i, --invert      前景/背景の反転
+  -t, --truecolor   24bit カラー強制(既定は COLORTERM で自動判定、他は 256 色)
+  -f, --force       stdout が端末でなくても強制着色(既定は素通し、lolcat と同じ)
+
+rscat 追加分:
+  -e, --exec CMD...   実行モード:CMD を pty で実行し出力を虹色化("-- CMD"も可)
+  -a, --always        虹セッションに入る(以降すべて虹色、exit か -c で抜ける)
+  -c, --cancel        虹セッションを解除
+  --proto P           画像プロトコル auto|kitty|iterm(既定 auto)
+  -q, --quiet         画像モードでファイル名を表示しない
+  --image             ファイル引数を強制的に画像として扱う
+  --init SHELL        シェル統合スニペットを出力(bash|zsh|sh|fish|powershell|cmd)
+  --lang L            UI 言語 zh-CN|zh-TW|en|ja(既定はシステム LANG に追従)
+  -h, --help          このヘルプを表示
+  -V, --version       バージョンを表示
+
+注:パイプで画像が出ないのは fastfetch の制限です(tty 以外に画像を出しません)、
+rscat -e fastfetch を使ってください(本体の -e フラグ、別ラッパー不要)。
+言語:システムに自動追従(簡中/繁中/英語/日本語)、--lang または RSCAT_LANG で指定可。

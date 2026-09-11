@@ -1,0 +1,39 @@
+rscat 0.1.0 — lolcat that can output images (rewritten in Rust)
+Rainbow algorithm is byte-for-byte compatible with lolcat 100.0.1,
+plus image passthrough and pseudo-terminal run mode.
+
+Usage:
+  somecmd | rscat                 filter mode: rainbowize stdin (like lolcat)
+  rscat FILE...                   rainbowize text files
+  rscat -e fastfetch              run mode: run a command in a pty, images + rainbow text
+  rscat neko.png [mimi.jpg ...]   image mode: display images + rainbow file names
+  rscat -a                        rainbow session: all later commands output rainbow colors
+  rscat -c                        cancel the rainbow session
+  rscat --init bash >> ~/.bashrc  shell integration snippet
+
+Options (same as lolcat):
+  -p, --spread F    rainbow spread (default 3.0)
+  -F, --freq F      rainbow frequency (default 0.1)
+  -S, --seed N      rainbow seed, 0=random (default 0)
+  --animate         neon flicker animation
+  -d, --duration N  animation frames (default 12)
+  -s, --speed F     animation frame rate (default 20.0)
+  -i, --invert      foreground/background invert
+  -t, --truecolor   force 24-bit color (default: auto via COLORTERM, else 256 colors)
+  -f, --force       force color even when stdout is not a tty (else passthrough, like lolcat)
+
+rscat extras:
+  -e, --exec CMD...   run mode: run CMD in a pty and rainbowize its output ("-- CMD" also works)
+  -a, --always        enter rainbow session (later commands all rainbow, exit or -c to leave)
+  -c, --cancel        cancel the rainbow session
+  --proto P           image protocol auto|kitty|iterm (default auto)
+  -q, --quiet         don't print file names in image mode
+  --image             force treating file arguments as images
+  --init SHELL        print shell integration snippet (bash|zsh|sh|fish|powershell|cmd)
+  --lang L            UI language zh-CN|zh-TW|en|ja (default follows system LANG)
+  -h, --help          show this help
+  -V, --version       show version
+
+Note: no images in a pipe is a fastfetch limitation (it won't emit images to a non-tty),
+use rscat -e fastfetch (built-in -e flag, no extra wrapper command needed).
+Language: auto-follows the system (zh-CN/zh-TW/en/ja), override with --lang or RSCAT_LANG.
