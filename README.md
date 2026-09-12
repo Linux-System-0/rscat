@@ -66,13 +66,15 @@ rscat -a
 rscat -c     # 或输入 exit,退出会话
 ```
 
-> **`fastfetch | rscat` 想要图片?加 `--pipe false`:**
-> **Want images from `fastfetch | rscat`? Add `--pipe false`:**
-> ```bash
-> fastfetch --pipe false | rscat        # 图片 + 彩虹字,一次到位
+> **`fastfetch | rscat` 直接就有图片+彩虹(fish 已内置):**
+> **`fastfetch | rscat` just works out of the box (fish integration included):**
+> ```fish
+> # config.fish 已定义同名函数:stdout 是管道时自动追加 --pipe false
+> # A same-named function in config.fish appends --pipe false when stdout is piped
+> fastfetch | rscat        # 图片 + 彩虹字,一次到位 / images + rainbow in one pipe
 > ```
-> 管道里默认看不到图片是 fastfetch 的 isatty 检查(stdout 非终端就不发图片数据,连 `--kitty/--kitty-direct` 都只出 ASCII)。`--pipe false` 可以强行关闭该检测:图片 APC、布局定位序列、主题色全部照发,rscat 只负责把文本染成彩虹、把图片序列原样放行(实测 kitty-direct 路径传输 + 625 处彩虹码共存)。
-> By default fastfetch skips image emission when stdout is not a tty (its isatty check). `--pipe false` overrides that: image APC, layout escapes and colors all flow, and rscat rainbows the text while passing image sequences through untouched (verified: kitty-direct path transfer + 625 rainbow codes coexist).
+> 管道里默认看不到图片是 fastfetch 的 isatty 检查(stdout 非终端就不发图片数据)。`--pipe false` 强行关闭该检测:图片 APC、布局定位序列全部照发,rscat 负责染彩虹、放行图片序列(实测 kitty-direct 路径传输 + 625 处彩虹码共存)。非 fish 用户手动加 `--pipe false` 即可;重定向到文件时想要纯净输出用 `command fastfetch`。
+> fastfetch skips image emission when stdout is not a tty; `--pipe false` overrides that. Non-fish users: add the flag manually. Use `command fastfetch` for clean redirects.
 
 > **fastfetch logo 类型建议:用 `kitty`,别用 `kitty-direct`**(血泪结论,见下)。
 > **fastfetch logo type: prefer `kitty` over `kitty-direct`** (hard-won, see below).

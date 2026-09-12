@@ -4,9 +4,9 @@
 
 | 文件 | 安装命令 |
 |---|---|
-| `rscat-0.1.0-1-x86_64.pkg.tar.gz` | `sudo pacman -U rscat-0.1.0-1-x86_64.pkg.tar.gz` |
-| `rscat_0.1.0-1_amd64.deb` | `sudo apt install ./rscat_0.1.0-1_amd64.deb` |
-| `rscat-0.1.0-1.x86_64.rpm` | `sudo rpm -Uvh rscat-0.1.0-1.x86_64.rpm` |
+| `rscat-0.1.0-2-x86_64.pkg.tar.gz` | `sudo pacman -U rscat-0.1.0-2-x86_64.pkg.tar.gz` |
+| `rscat_0.1.0-2_amd64.deb` | `sudo apt install ./rscat_0.1.0-2_amd64.deb` |
+| `rscat-0.1.0-2.x86_64.rpm` | `sudo rpm -Uvh rscat-0.1.0-2.x86_64.rpm` |
 | `freebsd/rscat-0.1.0-freebsd-amd64.pkg` | FreeBSD: `pkg add ./rscat-0.1.0-freebsd-amd64.pkg` |
 | `freebsd/rscat-0.1.0-freebsd-arm64.pkg` | FreeBSD arm64: `pkg add ./…` |
 
