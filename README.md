@@ -4,8 +4,8 @@
 
 **lolcat that can output images** — rewritten in Rust, byte-for-byte rainbow compatible with `lolcat`, plus kitty/iTerm2 image passthrough, PTY run mode and rainbow sessions.
 
-> 起源:前身 `nyacat`(Python 单文件)为解决 `fastfetch | lolcat` 不能同时显示图片和彩虹字而写;本仓库是其 Rust 重写与正式工程化版本,原 Python 实现见 [`original/nyacat.py`](original/nyacat.py)。
-> Origin: predecessor `nyacat` (single-file Python) was written so `fastfetch` can show images *and* rainbow text at once; this repo is its Rust rewrite and productionized version. The original Python implementation lives in [`original/nyacat.py`](original/nyacat.py).
+> 起源:前身 `nyacat`(Python 单文件)为解决 `fastfetch | lolcat` 不能同时显示图片和彩虹字而写;本仓库是其 Rust 重写与正式工程化版本(Python 原型已退役移除)。
+> Origin: predecessor `nyacat` (single-file Python) was written so `fastfetch` can show images *and* rainbow text at once; this repo is its Rust rewrite and productionized version (the Python prototype has been retired).
 
 ---
 
@@ -19,6 +19,7 @@
 | 图片模式 | `rscat logo.png`:直接显示本地图片(PNG/JPEG/GIF) | `rscat logo.png`: display local images directly |
 | 彩虹会话 | `rscat -a` 之后所有命令彩虹输出,`rscat -c` 取消 | `rscat -a`: all later commands rainbow, `rscat -c` cancels |
 | 多语言 | 简中/繁中/英文/日文,跟随系统 `LANG`,可 `--lang` 指定 | zh-CN/zh-TW/en/ja, follows system `LANG` |
+| 调用 shell 检测 | `-e`/`-a` 自动识别父进程里的真实 shell(fish/zsh/bash…),fastfetch 的 SHELL 模块显示本尊而非 rscat | Detects the real calling shell from the parent chain, so fastfetch's SHELL module shows fish/zsh/bash instead of rscat |
 | 多 shell | bash / zsh / sh / fish / PowerShell / cmd 集成片段 | Integration snippets for 6 shells |
 | 跨平台 | Linux(已测) / FreeBSD / macOS / Windows(见平台矩阵) | Linux (tested) / FreeBSD / macOS / Windows (see matrix) |
 
@@ -92,6 +93,23 @@ Same options as lolcat plus rscat extras. Full multilingual help: `rscat -h`.
 
 ---
 
+## 预编译包 Prebuilt packages
+
+见 [`build/`](build/) 目录(本机 x86_64 构建三格式;aarch64 与跨平台见下):
+
+See [`build/`](build/) (local x86_64 builds; aarch64 and cross-platform below):
+
+```
+build/x86_64/rscat-0.1.0-1-x86_64.pkg.tar.gz   # Arch / CachyOS: pacman -U
+build/x86_64/rscat_0.1.0-1_amd64.deb           # Debian/Ubuntu: dpkg -i 或 apt install ./…
+build/x86_64/rscat-0.1.0-1.x86_64.rpm          # Fedora/openSUSE: rpm -Uvh
+```
+
+aarch64/arm64 与 macOS/Windows/FreeBSD 的构建方式见 [build/README.md](build/README.md)。
+For aarch64/arm64 and macOS/Windows/FreeBSD builds, see [build/README.md](build/README.md).
+
+---
+
 ## 与前身差异 Differences from nyacat (Python)
 
 1. **修了 `-c`/`-e` 图片文字错位 bug**(两张截屏的症状),分两层:
@@ -104,6 +122,10 @@ Same options as lolcat plus rscat extras. Full multilingual help: `rscat -h`.
    `-a`/`-c` sessions are new; `-e` replaces Python's `-c`; `--animate` is long-only now.
 4. 非 PNG 转码由 Pillow 换成 `image` crate(纯 Rust,无系统依赖);重采样器不同导致像素均值差约 2%(肉眼不可辨),尺寸/协议帧完全一致。
    Non-PNG transcode moved from Pillow to the `image` crate (pure Rust); resampler differs slightly (~2% mean pixel diff, invisible), dimensions/framing identical.
+5. **调用 shell 检测**(0.1.0 第二轮修复):fastfetch 按父进程报告 SHELL,直接 spawn 会显示 "rscat"。现从 `/proc` 父链识别真实调用 shell:`-e` 用它包一层 `-c`(bash/zsh 追加 `; exit $?` 破掉末尾单命令 exec 优化并保退出码),`-a` 会话直接用同款 shell;子进程 `SHELL` 环境变量同步指向它。
+   **Calling-shell detection** (second fix round): fastfetch reports SHELL from the parent process; rscat now detects the real shell from `/proc` parent chain and wraps `-e` commands with it (`; exit $?` defeats bash/zsh tail-exec optimization while preserving exit codes), uses the same shell for `-a` sessions, and points the child's `SHELL` env at it.
+6. **zsh 首次向导压制**:`-a` 起 zsh 会话且无 `~/.zshrc` 时,`zsh-newuser-install` 向导会刷屏并向导选项 2 在 Arch 上 `cp` 不存在的推荐文件报错。现用临时 `ZDOTDIR`(含最小 `.zshrc`)压掉,已有配置则不干预。
+   **zsh first-run wizard suppressed**: with no `~/.zshrc`, the `zsh-newuser-install` wizard spams the session (and its option 2 errors on Arch). A temp `ZDOTDIR` with a minimal `.zshrc` suppresses it; untouched if the user already has one.
 
 ---
 
@@ -112,22 +134,17 @@ Same options as lolcat plus rscat extras. Full multilingual help: `rscat -h`.
 ```bash
 cargo test          # 单元测试:彩虹向量/base64/PNG头/魔数
 cargo build --release
-# 与 Python 原版逐字节对照(过滤器):
-nyacat -f -S 42 < corpus.bin | cmp - <(rscat -f -S 42 < corpus.bin)
-# 假终端排版 oracle(需 fastfetch):
-python3 tests/emu_test.py --direct   # 对照组
-python3 tests/emu_test.py --proxy    # 实验组,版面应与对照组一致
+install -Dm755 target/release/rscat ~/.local/bin/rscat
 ```
 
 项目结构 Layout:
 
 ```
-src/            main.rs(CLI) rainbow.rs filter.rs image.rs
+src/            main.rs(CLI) rainbow.rs filter.rs image.rs shell_detect.rs
                 pty_unix.rs pty_windows.rs persist.rs i18n.rs shell.rs
                 help_{zh_cn,zh_tw,en,ja}.txt
 shells/         rscat.{bash,zsh,sh,fish,ps1,cmd}(--init 输出的正本)
-original/       nyacat.py(Python 前身,已修复版,供对照)
-tests/          emu_test.py(假终端排版 oracle)
+build/          预编译包(见上)与跨平台构建说明
 ```
 
 License:待定 TBD.

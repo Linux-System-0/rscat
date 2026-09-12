@@ -1,0 +1,73 @@
+# 任务:在 Windows 上构建 rscat 的安装包(.exe 安装器 + .msi)
+
+你在 Windows 机器上。请把 Rust 命令行工具 rscat 打成 Windows 安装包(x86_64 为主,
+arm64 可选),两种格式:Inno Setup 的 .exe 安装器 + WiX 的 .msi。
+
+## 项目源码
+
+源码在 Linux 机器的 `/home/terminal/Documents/Projects/rscat/`(纯 Rust,无 C 依赖,
+`Cargo.toml` + `src/*.rs` + `shells/`)。git clone / scp 同步过来即可(排除 target/ 和 build/)。
+
+## 构建步骤
+
+```powershell
+# 1. 工具链
+winget install Rustlang.Rustup   # 或 https://rustup.rs
+rustup default stable
+
+# 2. 构建(x86_64;arm64 可选:rustup target add aarch64-pc-windows-msvc)
+cd rscat
+cargo build --release
+# 产物: target\release\rscat.exe(静态链接 CRT 默认关闭,依赖系统 msvcrt 无需 VCredist)
+
+# 3. Inno Setup 安装器(.exe)
+#    安装 Inno Setup: winget install JRSoftware.InnoSetup
+#    脚本要点(保存为 installer.iss 后 ISCC installer.iss):
+[Setup]
+AppName=rscat
+AppVersion=0.1.0
+DefaultDirName={autopf}\rscat
+DefaultGroupName=rscat
+OutputDir=.
+OutputBaseFilename=rscat-0.1.0-windows-x86_64-setup
+ArchitecturesInstallIn64BitMode=x64compatible
+[Files]
+Source: "target\release\rscat.exe"; DestDir: "{app}"
+Source: "shells\*"; DestDir: "{app}\shells"
+[Icons]
+Name: "{group}\rscat"; Filename: "{app}\rscat.exe"
+[Tasks]
+Name: "addpath"; Description: "把 rscat 加入用户 PATH"
+[Code]
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    if WizardIsTaskSelected('addpath') then
+      RegWriteStringValue(HKEY_CURRENT_USER, 'Environment', 'RSCAT_PATH', ExpandConstant('{app}'));
+end;
+
+# 4. WiX 的 .msi(winget install WiXToolset.WiX 或 MSIX 打包均可)
+#    最小 wixproj:装 rscat.exe 到 Program Files\rscat 并写 PATH 环境变量
+#    产物名:rscat-0.1.0-windows-x86_64.msi
+```
+
+## 交付物(放到项目 build/windows/ 目录)
+
+- `rscat-0.1.0-windows-x86_64-setup.exe`(Inno Setup 安装器)
+- `rscat-0.1.0-windows-x86_64.msi`
+- (可选)`rscat-0.1.0-windows-aarch64.zip`(绿色版即可)
+
+## 验收标准
+
+1. 安装后新开终端 `rscat --version` 输出 `rscat 0.1.0`,`rscat -h` 正常。
+2. PowerShell/cmd 里 `echo hello | rscat -f` 输出彩虹色。
+3. Windows Terminal 里 `rscat 某图片.png` 能显示图片(WezTerm 走 --proto iterm;
+   Windows Terminal 当前不支持图形协议时,应报错退出而不是刷乱码)。
+4. 卸载后 PATH 恢复。
+
+## 已知行为(不是 bug,不要"修")
+
+- stdout 非 tty 且未加 `-f` 时原样直通(与 lolcat 一致)。
+- `-e`(pty 运行模式)和 `-a`(会话)需要 ConPTY,当前版本在 Windows 上会多语言
+  报错退出("needs Unix pty support")——这是已知限制,后续版本接 ConPTY;
+  构建时不要因此改代码。

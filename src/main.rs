@@ -8,6 +8,7 @@ mod image;
 mod persist;
 mod rainbow;
 mod shell;
+mod shell_detect;
 #[cfg(unix)]
 mod pty_unix;
 #[cfg(windows)]
@@ -29,12 +30,12 @@ fn pty_supported() -> bool {
 }
 
 #[cfg(unix)]
-fn pty_run(cmd: &[String], flt: &mut LolcatFilter, stop: Option<&std::path::Path>) -> i32 {
-    pty_unix::run(cmd, flt, stop)
+fn pty_run(cmd: &[String], env: &[(String, String)], flt: &mut LolcatFilter, stop: Option<&std::path::Path>) -> i32 {
+    pty_unix::run(cmd, env, flt, stop)
 }
 #[cfg(windows)]
-fn pty_run(cmd: &[String], flt: &mut LolcatFilter, _stop: Option<&std::path::Path>) -> i32 {
-    let _ = (cmd, flt);
+fn pty_run(cmd: &[String], env: &[(String, String)], flt: &mut LolcatFilter, _stop: Option<&std::path::Path>) -> i32 {
+    let _ = (env, flt);
     pty_windows::run(cmd, flt, _stop)
 }
 
@@ -203,26 +204,34 @@ fn make_filter(o: &Opts, seed: u64, out: Box<dyn Write>) -> LolcatFilter {
     )
 }
 
-fn pick_shell(lang: Lang) -> String {
-    if let Ok(sh) = std::env::var("SHELL") {
-        if !sh.is_empty() {
-            return sh;
-        }
+/// 终端标题压栈(kitty/xterm 标题栈):进入 pty 模式前保存用户当前标题,
+/// 否则 kitty 等会把标签页标题显示成前台进程名 "rscat"。
+fn title_push() {
+    if std::io::stdout().is_terminal() {
+        let _ = std::io::stdout().write_all(b"\x1b[22;2t");
+        let _ = std::io::stdout().flush();
     }
-    #[cfg(windows)]
-    {
-        if let Ok(c) = std::env::var("COMSPEC") {
-            if !c.is_empty() {
-                return c;
-            }
-        }
-        return "cmd.exe".to_string();
+}
+
+/// 退出 pty 模式后的终端状态还原:弹回标题、软复位(DECSTR,
+/// 归零子进程残留的 SGR/字符集/滚动区域等)、字符集 ASCII、
+/// 主字体、光标显示。session=true 时再多发 kitty 键盘协议清零
+/// (内层会话 shell 若被 SIGKILL 强杀来不及弹栈,外层按键解析会残留)。
+fn terminal_restore(session: bool) {
+    if !std::io::stdout().is_terminal() {
+        return;
     }
-    #[cfg(not(windows))]
-    {
-        eprintln!("{}", t(lang, Msg::ShellFallback));
-        "/bin/sh".to_string()
+    let mut seq: Vec<u8> = Vec::new();
+    seq.extend_from_slice(b"\x1b[23;2t\x1b[!p\x1b(B\x1b)B\x1b[10m\x1b[m\x1b[?25h");
+    if session {
+        seq.extend_from_slice(b"\x1b[>0u\x1b[?1;5;2004l");
     }
+    let _ = std::io::stdout().write_all(&seq);
+    let _ = std::io::stdout().flush();
+}
+
+fn pick_shell() -> shell_detect::Shell {
+    shell_detect::detect_or_fallback()
 }
 
 fn main() {
@@ -300,9 +309,12 @@ fn main() {
         let seed = if o.seed != 0 { o.seed as u64 } else { random_seed() };
         let out: Box<dyn Write> = Box::new(std::io::stdout().lock());
         let mut flt = make_filter(&o, seed, out);
-        let shell = pick_shell(lang);
-        let rc = pty_run(&[shell], &mut flt, Some(&persist::session_marker()));
+        let sh = pick_shell();
+        let (sargv, senv) = shell_detect::session_argv(&sh);
+        title_push();
+        let rc = pty_run(&sargv, &senv, &mut flt, Some(&persist::session_marker()));
         flt.finish(std::io::stdout().is_terminal());
+        terminal_restore(true);
         persist::session_stop();
         eprintln!("{}", t(lang, Msg::SessionExit));
         std::process::exit(rc);
@@ -332,8 +344,15 @@ fn main() {
         }
         let out: Box<dyn Write> = Box::new(std::io::stdout().lock());
         let mut flt = make_filter(&o, seed, out);
-        let rc = pty_run(&o.exec, &mut flt, None);
+        // 用真实调用 shell 包一层:fastfetch 等按父进程报 SHELL,
+        // 直接 spawn 会显示 "rscat";包一层后显示 fish/zsh/bash 等本尊。
+        let sh = pick_shell();
+        let eargv = shell_detect::exec_argv(&sh, &o.exec);
+        let eenv = shell_detect::exec_env(&sh);
+        title_push();
+        let rc = pty_run(&eargv, &eenv, &mut flt, None);
         flt.finish(std::io::stdout().is_terminal());
+        terminal_restore(false);
         std::process::exit(rc);
     }
 

@@ -87,9 +87,10 @@ fn write_all(fd: RawFd, mut data: &[u8]) {
 }
 
 /// 在伪终端里跑 cmd。
+/// env:需要注入子进程的环境变量(SHELL 指向真实调用 shell、zsh 的 ZDOTDIR 等)。
 /// stop_file:会话标记文件;若给出且文件消失则结束(供 -a/-c 用)。
 /// 返回子进程退出码。
-pub fn run(cmd: &[String], flt: &mut LolcatFilter, stop_file: Option<&Path>) -> i32 {
+pub fn run(cmd: &[String], env: &[(String, String)], flt: &mut LolcatFilter, stop_file: Option<&Path>) -> i32 {
     if cmd.is_empty() {
         return 0;
     }
@@ -136,7 +137,17 @@ pub fn run(cmd: &[String], flt: &mut LolcatFilter, stop_file: Option<&Path>) -> 
         if pid == 0 {
             // ---- 子进程 ----
             libc::setsid();
-            let _ = libc::ioctl(sfd, libc::TIOCSCTTY as libc::c_ulong, 0);
+            let _ = libc::ioctl(sfd, libc::TIOCSCTTY, 0); // musl 上 Ioctl=i32,glibc=u64,取平台原生类型
+            for (k, v) in env {
+                if let (Ok(k), Ok(v)) = (
+                    CString::new(k.as_str()),
+                    CString::new(v.as_str()),
+                ) {
+                    unsafe {
+                        libc::setenv(k.as_ptr(), v.as_ptr(), 1);
+                    }
+                }
+            }
             libc::dup2(sfd, libc::STDIN_FILENO);
             libc::dup2(sfd, libc::STDOUT_FILENO);
             libc::dup2(sfd, libc::STDERR_FILENO);

@@ -1,0 +1,60 @@
+# 任务:在 FreeBSD 上构建 rscat 的 pkg 包
+
+你在 FreeBSD 机器上。请把 Rust 命令行工具 rscat 打成 FreeBSD 原生 pkg 包(x86_64 与/或 arm64)。
+
+## 项目源码
+
+源码在 Linux 机器的 `/home/terminal/Documents/Projects/rscat/`(纯 Rust,无 C 依赖)。
+git clone / scp 同步即可(排除 target/ 与 build/)。代码只用 libc 的通用 POSIX 接口
+(posix_openpt/fork/execvp/tcsetattr 等),没有 Linux 专属调用,FreeBSD 可直接编译。
+
+## 构建步骤
+
+```sh
+# 1. 工具链
+pkg install rust git
+
+# 2. 构建
+cd rscat
+cargo build --release
+# 产物: target/release/rscat
+
+# 3. 组装 plist 并打 pkg
+mkdir -p stage/usr/local/bin stage/usr/local/share/rscat/shells
+cp target/release/rscat stage/usr/local/bin/rscat
+cp shells/* stage/usr/local/share/rscat/shells/
+find stage -type f | sed 's|^stage||' > plist.txt
+
+pkg create -m . -r stage -p plist.txt -o out
+# 元数据 +MANIFEST(至少):
+#   name: rscat
+#   version: 0.1.0
+#   origin: utils/rscat
+#   comment: "Rainbow cat: lolcat-compatible colorizer with image output"
+#   maintainer: terminal@localhost
+#   www: https://github.com/terminal/rscat
+#   prefix: /usr/local
+#   abi: FreeBSD:14:*
+#   arch: amd64
+# 产物改名:rscat-0.1.0-freebsd-amd64.pkg
+```
+
+## 交付物(放到项目 build/freebsd/ 目录)
+
+- `rscat-0.1.0-freebsd-amd64.pkg`
+- (可选,arm64 机器上)`rscat-0.1.0-freebsd-aarch64.pkg`
+
+## 验收标准
+
+1. `pkg add ./rscat-0.1.0-freebsd-amd64.pkg` 安装成功。
+2. `rscat --version` 输出 `rscat 0.1.0`;`rscat -h` 正常。
+3. `echo hello | rscat -f` 输出彩虹色。
+4. kitty/WezTerm 终端里 `rscat 图片.png` 能显示图片(kitty 协议)或
+   `--proto iterm` 在 WezTerm 中显示。
+5. `pkg remove rscat` 干净卸载。
+
+## 已知行为(不是 bug,不要"修")
+
+- stdout 非 tty 且未加 `-f` 时原样直通(与 lolcat 一致)。
+- 会话/运行模式依赖 pty,FreeBSD 的 pty 是标准 POSIX 实现,应可直接工作;
+  若有问题请报告,不必修。
