@@ -72,6 +72,39 @@ pub fn session_start() -> std::io::Result<()> {
     Ok(())
 }
 
+/// 标记属主(rscat 进程)是否还活着。
+/// 注意:不能读 comm —— `-a` 代理期间 comm 被伪装成调用 shell 的名字;
+/// 用 /proc/<pid>/exe 的文件名判断(Linux,防 PID 复用误判),
+/// 其他 Unix 用 kill(pid, 0) 探活。
+fn owner_alive(pid: u32) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        match std::fs::read_link(format!("/proc/{pid}/exe")) {
+            Ok(p) => p.file_name().map(|n| n == "rscat").unwrap_or(false),
+            Err(_) => false,
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        unsafe { libc::kill(pid as i32, 0) == 0 }
+    }
+}
+
+/// 清理陈旧标记:终端被关闭时 rscat 来不及收尾,标记会残留;
+/// 属主进程已死(或 PID 复用后不是 rscat)的标记一律删除。
+pub fn cleanup_stale() {
+    for m in session_markers() {
+        let stale = std::fs::read_to_string(&m)
+            .ok()
+            .and_then(|s| s.trim().parse::<u32>().ok())
+            .map(owner_alive)
+            == Some(false);
+        if stale {
+            let _ = std::fs::remove_file(m);
+        }
+    }
+}
+
 /// 删除全部会话标记(`rscat -c`:取消所有会话)。
 pub fn session_stop() {
     for m in session_markers() {

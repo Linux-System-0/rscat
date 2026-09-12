@@ -274,6 +274,7 @@ fn main() {
     }
     if o.cancel {
         // -c:取消会话(会话内/外通用;会话主循环看到标记消失即收尾)
+        persist::cleanup_stale();
         if persist::session_active() {
             persist::session_stop();
             println!("{}", t(lang, Msg::CancelOk));
@@ -292,6 +293,7 @@ fn main() {
             eprintln!("{}", t(lang, Msg::SessionNested));
             std::process::exit(1);
         }
+        persist::cleanup_stale(); // 终端被关等异常退出留下的陈旧标记,属主已死则清除
         if persist::session_active() {
             eprintln!("{}", t(lang, Msg::SessionAlready));
             std::process::exit(1);

@@ -222,7 +222,6 @@ pub fn run(
                 if !stop_sent && !p.exists() {
                     // 会话被 rscat -c 取消:先 SIGHUP(交互式 shell 会正常退出,
                     // 它们通常忽略 SIGTERM),500ms 后还活着则 SIGKILL。
-                    eprintln!("[DEBUG rscat] 标记文件消失,发送 SIGHUP 给 pid {pid}");
                     libc::kill(pid, libc::SIGHUP);
                     stop_sent = true;
                     stop_at = Some(std::time::Instant::now());

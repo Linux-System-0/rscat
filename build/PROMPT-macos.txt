@@ -32,19 +32,19 @@ cp rscat-universal pkgroot/usr/local/bin/rscat        # 或分架构两个包
 cp shells/* pkgroot/usr/local/share/rscat/shells/
 pkgbuild --root pkgroot --identifier mo.terminal.rscat \
          --version 1.1.4 --install-location / rscat-core.pkg
-productbuild --package rscat-core.pkg rscat-1.1.4-6-macos.pkg
+productbuild --package rscat-core.pkg rscat-1.1.5-7-macos.pkg
 ```
 
 ## 交付物(放到项目 build/macos/ 目录)
 
-- `rscat-1.1.4-6-macos-aarch64.pkg`(Apple Silicon)
-- `rscat-1.1.4-6-macos-x86_64.pkg`(Intel)
-- (可选)`rscat-1.1.4-6-macos-universal.pkg`
+- `rscat-1.1.5-7-macos-aarch64.pkg`(Apple Silicon)
+- `rscat-1.1.5-7-macos-x86_64.pkg`(Intel)
+- (可选)`rscat-1.1.5-7-macos-universal.pkg`
 
 ## 验收标准
 
 1. `pkgutil --expand-full` 能展开;`lipo -info` 报告正确架构。
-2. 安装后 `/usr/local/bin/rscat --version` 输出 `rscat 1.1.4-6`;`rscat -h` 正常。
+2. 安装后 `/usr/local/bin/rscat --version` 输出 `rscat 1.1.5-7`;`rscat -h` 正常。
 3. `echo hello | rscat -f` 输出彩虹色(不带 -f 时非 tty 会原样直通,属正常)。
 4. 在 iTerm2/WezTerm 里 `rscat 某图片.png` 能显示图片(--proto iterm 自动)。
 
