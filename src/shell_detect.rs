@@ -269,7 +269,19 @@ pub fn session_argv(shell: &Shell) -> (Vec<String>, Vec<(String, String)>) {
             env.push(("ZDOTDIR".into(), dir.to_string_lossy().into_owned()));
         }
     }
-    (vec![shell.path.clone()], env)
+    // fish 会话:用 -C 注入同样的事件钩子(fish 原生发 OSC 133 的前提是
+    // 终端完成查询握手;显式标记保证提示符/输出边界一定被跟踪)。
+    let argv = if shell.kind == Kind::Fish {
+        vec![
+            shell.path.clone(),
+            "-C".into(),
+            "function __rscat_preexec --on-event fish_preexec; printf \"\\033]133;C\\007\"; end;\
+             function __rscat_precmd --on-event fish_prompt; printf \"\\033]133;D\\007\\033]133;A\\007\"; end".into(),
+        ]
+    } else {
+        vec![shell.path.clone()]
+    };
+    (argv, env)
 }
 
 /// -e 模式注入子进程的环境(至少把 SHELL 指向真实调用 shell)。

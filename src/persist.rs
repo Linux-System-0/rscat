@@ -62,13 +62,15 @@ pub fn session_markers() -> impl Iterator<Item = PathBuf> {
     .flatten()
 }
 
-/// 创建本会话的标记(父目录一并建好)。失败返回 Err(错误信息由调用方 i18n)。
+/// 创建本会话的标记(父目录一并建好)。内容为 "rscat的pid 父shell的pid",
+/// 供 cleanup_stale 判断会话是否已是无人认领的幽灵。失败返回 Err。
 pub fn session_start() -> std::io::Result<()> {
     let m = session_marker();
     if let Some(dir) = m.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    std::fs::write(&m, std::process::id().to_string())?;
+    let ppid = unsafe { libc::getppid() };
+    std::fs::write(&m, format!("{} {}", std::process::id(), ppid))?;
     Ok(())
 }
 
@@ -90,17 +92,32 @@ fn owner_alive(pid: u32) -> bool {
     }
 }
 
-/// 清理陈旧标记:终端被关闭时 rscat 来不及收尾,标记会残留;
-/// 属主进程已死(或 PID 复用后不是 rscat)的标记一律删除。
+/// 清理陈旧标记:终端被关闭时 rscat 来不及收尾,标记会残留。
+/// 陈旧判定:属主 rscat 已死,或属主还活着但其父 shell(启动 rscat 的
+/// 交互终端)已经不在 —— 后者是无人认领的幽灵会话,给它发 SIGHUP
+/// 让它收尾退出,并删除标记。
 pub fn cleanup_stale() {
     for m in session_markers() {
-        let stale = std::fs::read_to_string(&m)
-            .ok()
-            .and_then(|s| s.trim().parse::<u32>().ok())
-            .map(owner_alive)
-            == Some(false);
-        if stale {
+        let Ok(content) = std::fs::read_to_string(&m) else {
+            let _ = std::fs::remove_file(&m);
+            continue;
+        };
+        let mut nums = content.split_whitespace().filter_map(|t| t.parse::<u32>().ok());
+        let Some(owner) = nums.next() else {
+            let _ = std::fs::remove_file(&m); // 旧格式/空内容:按陈旧处理
+            continue;
+        };
+        if !owner_alive(owner) {
             let _ = std::fs::remove_file(m);
+            continue;
+        }
+        if let Some(parent) = nums.next() {
+            // 幽灵会话:属主活着,但它的父 shell 已经没了
+            let parent_gone = unsafe { libc::kill(parent as i32, 0) != 0 };
+            if parent_gone {
+                unsafe { libc::kill(owner as i32, libc::SIGHUP) };
+                let _ = std::fs::remove_file(m);
+            }
         }
     }
 }

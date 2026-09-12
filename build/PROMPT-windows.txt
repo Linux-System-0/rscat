@@ -25,11 +25,11 @@ cargo build --release
 #    脚本要点(保存为 installer.iss 后 ISCC installer.iss):
 [Setup]
 AppName=rscat
-AppVersion=1.1.5-7
+AppVersion=1.1.6-5
 DefaultDirName={autopf}\rscat
 DefaultGroupName=rscat
 OutputDir=.
-OutputBaseFilename=rscat-1.1.5-7-windows-x86_64-setup
+OutputBaseFilename=rscat-1.1.6-5-windows-x86_64-setup
 ArchitecturesInstallIn64BitMode=x64compatible
 [Files]
 Source: "target\release\rscat.exe"; DestDir: "{app}"
@@ -48,18 +48,18 @@ end;
 
 # 4. WiX 的 .msi(winget install WiXToolset.WiX 或 MSIX 打包均可)
 #    最小 wixproj:装 rscat.exe 到 Program Files\rscat 并写 PATH 环境变量
-#    产物名:rscat-1.1.5-7-windows-x86_64.msi
+#    产物名:rscat-1.1.6-5-windows-x86_64.msi
 ```
 
 ## 交付物(放到项目 build/windows/ 目录)
 
-- `rscat-1.1.5-7-windows-x86_64-setup.exe`(Inno Setup 安装器)
-- `rscat-1.1.5-7-windows-x86_64.msi`
-- (可选)`rscat-1.1.5-7-windows-aarch64.zip`(绿色版即可)
+- `rscat-1.1.6-5-windows-x86_64-setup.exe`(Inno Setup 安装器)
+- `rscat-1.1.6-5-windows-x86_64.msi`
+- (可选)`rscat-1.1.6-5-windows-aarch64.zip`(绿色版即可)
 
 ## 验收标准
 
-1. 安装后新开终端 `rscat --version` 输出 `rscat 1.1.5-7`,`rscat -h` 正常。
+1. 安装后新开终端 `rscat --version` 输出 `rscat 1.1.6-5`,`rscat -h` 正常。
 2. PowerShell/cmd 里 `echo hello | rscat -f` 输出彩虹色。
 3. Windows Terminal 里 `rscat 某图片.png` 能显示图片(WezTerm 走 --proto iterm;
    Windows Terminal 当前不支持图形协议时,应报错退出而不是刷乱码)。

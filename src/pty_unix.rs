@@ -119,6 +119,7 @@ pub fn run(
     comm: Option<&str>,
     flt: &mut LolcatFilter,
     stop_file: Option<&Path>,
+    watch_parent: bool,
 ) -> i32 {
     if cmd.is_empty() {
         return 0;
@@ -202,6 +203,7 @@ pub fn run(
         GOT_SIGWINCH.store(false, Ordering::Relaxed);
 
         let saved = stdin_cbreak();
+        let initial_ppid = unsafe { libc::getppid() }; // 父 shell(启动 rscat 的终端)
         let mut poll_stdin = saved.is_some();
         let mut rc = 0;
         let mut child_gone = false;
@@ -221,6 +223,13 @@ pub fn run(
             if GOT_SIGINT.swap(false, Ordering::Relaxed) {
                 // 转发给子进程(交互式 shell 取消当前行,非交互等价于终止)
                 libc::kill(pid, libc::SIGINT);
+            }
+            if watch_parent && !stop_sent && libc::getppid() != initial_ppid {
+                // 父 shell 已消失(终端被关闭等):这是无人认领的幽灵会话,
+                // 收尾退出,避免占用标记文件让新会话误判"已在运行"。
+                libc::kill(pid, libc::SIGHUP);
+                stop_sent = true;
+                stop_at = Some(std::time::Instant::now());
             }
             if let Some(p) = stop_file {
                 if !stop_sent && !p.exists() {

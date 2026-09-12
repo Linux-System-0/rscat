@@ -30,11 +30,11 @@ fn pty_supported() -> bool {
 }
 
 #[cfg(unix)]
-fn pty_run(cmd: &[String], env: &[(String, String)], comm: Option<&str>, flt: &mut LolcatFilter, stop: Option<&std::path::Path>) -> i32 {
-    pty_unix::run(cmd, env, comm, flt, stop)
+fn pty_run(cmd: &[String], env: &[(String, String)], comm: Option<&str>, flt: &mut LolcatFilter, stop: Option<&std::path::Path>, watch_parent: bool) -> i32 {
+    pty_unix::run(cmd, env, comm, flt, stop, watch_parent)
 }
 #[cfg(windows)]
-fn pty_run(cmd: &[String], env: &[(String, String)], _comm: Option<&str>, flt: &mut LolcatFilter, _stop: Option<&std::path::Path>) -> i32 {
+fn pty_run(cmd: &[String], env: &[(String, String)], _comm: Option<&str>, flt: &mut LolcatFilter, _stop: Option<&std::path::Path>, _watch: bool) -> i32 {
     let _ = (env, flt);
     pty_windows::run(cmd, flt, _stop)
 }
@@ -314,7 +314,7 @@ fn main() {
         let sh = pick_shell();
         let (sargv, senv) = shell_detect::session_argv(&sh);
         title_push();
-        let rc = pty_run(&sargv, &senv, Some(&sh.name()), &mut flt, Some(&persist::session_marker()));
+        let rc = pty_run(&sargv, &senv, Some(&sh.name()), &mut flt, Some(&persist::session_marker()), true);
         flt.finish(std::io::stdout().is_terminal());
         terminal_restore(true);
         persist::session_stop();
@@ -352,7 +352,7 @@ fn main() {
         let eargv = shell_detect::exec_argv(&sh, &o.exec);
         let eenv = shell_detect::exec_env(&sh);
         title_push();
-        let rc = pty_run(&eargv, &eenv, Some(&sh.name()), &mut flt, None);
+        let rc = pty_run(&eargv, &eenv, Some(&sh.name()), &mut flt, None, false);
         flt.finish(std::io::stdout().is_terminal());
         terminal_restore(false);
         std::process::exit(rc);
