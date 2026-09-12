@@ -247,7 +247,17 @@ pub fn exec_argv(shell: &Shell, cmd: &[String]) -> Vec<String> {
 /// .zshrc 的临时目录压掉;用户已有 .zshrc 则不干预。
 pub fn session_argv(shell: &Shell) -> (Vec<String>, Vec<(String, String)>) {
     let mut env: Vec<(String, String)> = vec![("SHELL".into(), shell.path.clone())];
-    if shell.name().eq_ignore_ascii_case("zsh") {
+    let name = shell.name();
+    if name.eq_ignore_ascii_case("bash") {
+        // bash 无原生 OSC 133:PROMPT_COMMAND(提示符前=A)与
+        // PS0(命令执行前=C,输出区域开始)注入标记。
+        env.push((
+            "PROMPT_COMMAND".into(),
+            r#"printf "\033]133;A\007""#.into(),
+        ));
+        env.push(("PS0".into(), r#"\033]133;C\007"#.into()));
+    }
+    if name.eq_ignore_ascii_case("zsh") {
         let has_rc = std::env::var("ZDOTDIR")
             .ok()
             .map(|d| !d.is_empty())
@@ -258,7 +268,13 @@ pub fn session_argv(shell: &Shell) -> (Vec<String>, Vec<(String, String)>) {
         if !has_rc {
             let dir = std::env::temp_dir().join(format!("rscat-zdot-{}", std::process::id()));
             if std::fs::create_dir_all(&dir).is_ok()
-                && std::fs::write(dir.join(".zshrc"), "# by rscat: suppress zsh-newuser-install\n").is_ok()
+                && std::fs::write(
+                    dir.join(".zshrc"),
+                    "# by rscat: suppress zsh-newuser-install\n\
+                     precmd()  { printf \"\\033]133;D\\007\\033]133;A\\007\"; }\n\
+                     preexec() { printf \"\\033]133;C\\007\"; }\n",
+                )
+                .is_ok()
             {
                 env.push(("ZDOTDIR".into(), dir.to_string_lossy().into_owned()));
             }

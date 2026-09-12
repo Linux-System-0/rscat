@@ -35,6 +35,10 @@ pub struct LolcatFilter {
     run_emitted: bool,
     line: Vec<(Vec<u8>, Option<char>)>,
     saw_nl: bool,
+    /// OSC 133 shell 集成区域跟踪:true = 提示符/命令行区域(不彩虹,
+    /// 子进程自带的颜色原样保留),false = 命令输出区域(上彩虹)。
+    /// 标记:A=提示符开始 B=命令行开始 C=输出开始 D=命令结束。
+    suppress: bool,
 }
 
 impl LolcatFilter {
@@ -64,6 +68,7 @@ impl LolcatFilter {
             i: 0,
             run_emitted: false,
             line: Vec::new(),
+            suppress: false,
             saw_nl: false,
         }
     }
@@ -98,7 +103,31 @@ impl LolcatFilter {
         }
     }
 
+    /// OSC 133 shell 集成标记:跟踪提示符/输出区域。
+    /// A=提示符开始 B=命令行开始 C=输出开始 D=命令结束。
+    /// A/B/D 区域不彩虹(保留子进程自带颜色),C 之后上彩虹。
+    fn osc133_check(&mut self) {
+        if self.run.len() >= 7 && self.run.starts_with(b"\x1b]133;") {
+            match self.run[6] {
+                b'C' => self.suppress = false,
+                b'A' | b'B' | b'D' => self.suppress = true,
+                _ => {}
+            }
+        }
+    }
+
     fn write_pair(&mut self, run: &[u8], ch: Option<char>, idx: usize, frame_strip: bool) {
+        // OSC 133 提示符/命令行区域:不上彩虹,子进程自带颜色原样保留。
+        if self.suppress {
+            if !run.is_empty() {
+                self.write_raw(run);
+            }
+            if let Some(c) = ch {
+                let mut b = [0u8; 4];
+                self.write_raw(c.encode_utf8(&mut b).as_bytes());
+            }
+            return;
+        }
         let run_bytes: &[u8] = if frame_strip {
             // animate 重绘帧:剥掉清行类 CSI(与 lol.rb println_ani 一致)。
             // 为避免分配,仅当包含 ESC 时才走剥离路径。
@@ -260,6 +289,7 @@ impl LolcatFilter {
                     self.run.push(byte);
                     if byte == 0x07 {
                         self.state = State::Ground;
+                        self.osc133_check();
                         self.seq_done();
                     } else if byte == 0x1B {
                         self.state = State::OscEsc;
@@ -269,6 +299,7 @@ impl LolcatFilter {
                     self.run.push(byte);
                     if byte == b'\\' {
                         self.state = State::Ground;
+                        self.osc133_check();
                         self.seq_done();
                     } else {
                         self.state = State::Osc;
