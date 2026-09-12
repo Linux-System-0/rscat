@@ -93,16 +93,19 @@ fn parent_chain_comms(max: usize) -> Vec<String> {
     let mut out = Vec::new();
     let mut pid = std::process::id();
     for _ in 0..max {
-        let ok = |args: &[&str]| -> Option<String> {
+        let ask = |args: &[&str]| -> Option<String> {
             std::process::Command::new("ps")
                 .args(args)
                 .output()
                 .ok()
                 .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         };
-        let comm = ok(&["-o", "comm=", "-p", &pid.to_string()])?;
-        out.push(comm.clone());
-        let ppid = ok(&["-o", "ppid=", "-p", &pid.to_string()]).unwrap_or_default();
+        let comm = match ask(&["-o", "comm=", "-p", &pid.to_string()]) {
+            Some(c) if !c.is_empty() => c,
+            _ => break,
+        };
+        out.push(comm);
+        let ppid = ask(&["-o", "ppid=", "-p", &pid.to_string()]).unwrap_or_default();
         let ppid: u32 = ppid.parse().unwrap_or(1);
         if ppid <= 1 {
             break;
@@ -133,6 +136,31 @@ pub fn detect() -> Option<Shell> {
                 });
             }
         }
+    }
+    None
+}
+
+/// 真实终端名:从 rscat 的上一级开始沿父链跳过 shell,
+/// 第一个非 shell 祖先就是终端模拟器(kitty/alacritty/…)。
+/// 这正是 fastfetch 终端模块自己的判定逻辑(它按父进程找终端,
+/// 跳过已知 shell),rscat 卡在中间会被当成终端显示 "rscat"。
+/// (当前未使用:comm 伪装成调用 shell 名让 fastfetch 穿过本进程;
+///  保留给未来需要显式终端名的场景。)
+#[allow(dead_code)]
+pub fn detect_terminal_name() -> Option<String> {
+    for comm in parent_chain_comms(8).into_iter().skip(1) {
+        // skip(1):跳过 rscat 自己
+        let base = Path::new(&comm)
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| comm.clone());
+        if base == "rscat" {
+            continue;
+        }
+        if classify(&base).is_some() {
+            continue; // shell 祖先,继续往上
+        }
+        return Some(base);
     }
     None
 }

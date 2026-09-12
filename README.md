@@ -66,10 +66,13 @@ rscat -a
 rscat -c     # 或输入 exit,退出会话
 ```
 
-> **为什么 `fastfetch | rscat` 看不到图片?**
-> **Why no images with `fastfetch | rscat`?**
-> 管道里出不来图片是 fastfetch 的限制:stdout 非 tty 时它根本不发送图片数据(**实测**:连 `--kitty`/`--kitty-direct` 强制指定也只出 ASCII,0 字节 APC;且 fastfetch 没有 `--force-tty` 之类的开关),任何过滤器都变不出来。请用 `rscat -e fastfetch`(伪终端模式,fastfetch 以为在真终端里,照常发图片)。
-> That's a fastfetch limitation: it never emits image data to a non-tty (**verified**: even forced `--kitty`/`--kitty-direct` yield ASCII-only, 0 APC bytes; no `--force-tty` switch exists), so no filter can conjure it. Use `rscat -e fastfetch` (PTY mode — fastfetch believes it's on a real terminal and emits images).
+> **`fastfetch | rscat` 想要图片?加 `--pipe false`:**
+> **Want images from `fastfetch | rscat`? Add `--pipe false`:**
+> ```bash
+> fastfetch --pipe false | rscat        # 图片 + 彩虹字,一次到位
+> ```
+> 管道里默认看不到图片是 fastfetch 的 isatty 检查(stdout 非终端就不发图片数据,连 `--kitty/--kitty-direct` 都只出 ASCII)。`--pipe false` 可以强行关闭该检测:图片 APC、布局定位序列、主题色全部照发,rscat 只负责把文本染成彩虹、把图片序列原样放行(实测 kitty-direct 路径传输 + 625 处彩虹码共存)。
+> By default fastfetch skips image emission when stdout is not a tty (its isatty check). `--pipe false` overrides that: image APC, layout escapes and colors all flow, and rscat rainbows the text while passing image sequences through untouched (verified: kitty-direct path transfer + 625 rainbow codes coexist).
 
 > **fastfetch logo 类型建议:用 `kitty`,别用 `kitty-direct`**(血泪结论,见下)。
 > **fastfetch logo type: prefer `kitty` over `kitty-direct`** (hard-won, see below).
@@ -84,7 +87,7 @@ Same options as lolcat plus rscat extras. Full multilingual help: `rscat -h`.
 | 平台 Platform | 过滤 filter | 图片 image | 运行 `-e` run | 会话 `-a` session | 说明 Notes |
 |---|---|---|---|---|---|
 | Linux | ✅ 已测 | ✅ 已测 | ✅ 已测 | ✅ 已测 | CI/日常主力 |
-| FreeBSD | ✅ 预期 | ✅ 预期 | ✅ 预期 | ✅ 预期 | portable POSIX 代码,待实机验证 |
+| FreeBSD | ✅ 预期 | ✅ 预期 | ✅ 预期 | ✅ 预期 | 已提供交叉编译包(14.3,amd64/arm64),待实机验证 |
 | macOS | ✅ 预期 | ✅ 预期 | ✅ 预期 | ✅ 预期 | 同上;`--proto iterm` 适配 iTerm2/WezTerm |
 | Windows | ✅ | ✅(wezterm+iterm) | ❌ 明确报错 | ❌ 明确报错 | ConPTY 后续版本;不过滤乱码,直接多语言提示 |
 
@@ -105,8 +108,12 @@ build/x86_64/rscat_0.1.0-1_amd64.deb           # Debian/Ubuntu: dpkg -i 或 apt 
 build/x86_64/rscat-0.1.0-1.x86_64.rpm          # Fedora/openSUSE: rpm -Uvh
 ```
 
-aarch64/arm64 与 macOS/Windows/FreeBSD 的构建方式见 [build/README.md](build/README.md)。
-For aarch64/arm64 and macOS/Windows/FreeBSD builds, see [build/README.md](build/README.md).
+```
+build/freebsd/rscat-0.1.0-freebsd-amd64.pkg    # pkg add ./rscat-0.1.0-freebsd-amd64.pkg (FreeBSD 14+)
+build/freebsd/rscat-0.1.0-freebsd-arm64.pkg
+```
+aarch64 Linux 与 macOS/Windows/FreeBSD 的构建方式见 [build/README.md](build/README.md)。
+For aarch64 Linux and macOS/Windows/FreeBSD builds, see [build/README.md](build/README.md).
 
 ---
 
@@ -126,6 +133,10 @@ For aarch64/arm64 and macOS/Windows/FreeBSD builds, see [build/README.md](build/
    **Calling-shell detection** (second fix round): fastfetch reports SHELL from the parent process; rscat now detects the real shell from `/proc` parent chain and wraps `-e` commands with it (`; exit $?` defeats bash/zsh tail-exec optimization while preserving exit codes), uses the same shell for `-a` sessions, and points the child's `SHELL` env at it.
 6. **zsh 首次向导压制**:`-a` 起 zsh 会话且无 `~/.zshrc` 时,`zsh-newuser-install` 向导会刷屏并向导选项 2 在 Arch 上 `cp` 不存在的推荐文件报错。现用临时 `ZDOTDIR`(含最小 `.zshrc`)压掉,已有配置则不干预。
    **zsh first-run wizard suppressed**: with no `~/.zshrc`, the `zsh-newuser-install` wizard spams the session (and its option 2 errors on Arch). A temp `ZDOTDIR` with a minimal `.zshrc` suppresses it; untouched if the user already has one.
+7. **TER/TFO 模块显示 "rscat"/消失**:fastfetch 的终端模块跳过 shell 祖先后取第一个非 shell 进程当终端,rscat 正好卡位;终端认错后 TerminalFont 也跟着消失。现代理期间把 rscat 的进程名(comm)临时伪装成调用 shell,fastfetch 穿过它命中链上真实终端(kitty 等,版本号由真终端应答 XTVERSION),退出后还原。
+   **TER/TFO showing "rscat"/missing**: fastfetch's terminal module treats the first non-shell ancestor as the terminal — which was rscat itself — and TerminalFont vanished with it. During proxied runs rscat now masquerades its comm as the calling shell so fastfetch walks through to the real terminal (kitty, whose XTVERSION answer carries the version), restoring the original comm afterwards.
+8. **终端标题与字体状态残留**:`-e`/`-a` 退出后终端标题显示 "rscat"、字体/字符集状态可能被子进程带偏。现在进入 pty 模式前压栈标题(CSI 22;2t),退出后弹栈(CSI 23;2t)+ DECSTR 软复位 + 字符集/主字体复位;会话取消路径额外清零 kitty 键盘协议。
+   **Terminal title & font state restoration**: on exiting `-e`/`-a` the title showed "rscat" and charset/font state could drift. rscat now pushes the title stack on entry, pops it plus DECSTR/charset/primary-font reset on exit, and zeroes the kitty keyboard protocol after cancelled sessions.
 
 ---
 

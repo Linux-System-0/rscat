@@ -86,11 +86,40 @@ fn write_all(fd: RawFd, mut data: &[u8]) {
     }
 }
 
+/// 改进程 comm(15 字节截断)。代理期间把 rscat 的 comm 临时改成
+/// 真实终端名,让 fastfetch 的终端模块(按父进程找终端)显示本尊。
+/// prctl(PR_SET_NAME) 是 Linux 专属;FreeBSD/macOS 上不伪装,
+/// fastfetch 会显示 "rscat"(可接受的行为差异)。
+#[cfg(target_os = "linux")]
+fn set_comm(name: &str) {
+    let mut buf = [0u8; 16];
+    let bytes = name.as_bytes();
+    let n = bytes.len().min(15);
+    buf[..n].copy_from_slice(&bytes[..n]);
+    unsafe {
+        libc::prctl(libc::PR_SET_NAME, buf.as_ptr(), 0, 0, 0);
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn set_comm(_name: &str) {}
+
 /// 在伪终端里跑 cmd。
+/// comm:代理期间 rscat 的进程名伪装(调用 shell 的名字)。fastfetch 等按
+/// 父进程链报 SHELL/终端:shell 模块取直接父进程(包装 shell,本尊);
+/// 终端模块跳过 shell 往上找第一个非 shell —— 若 rscat 保持自己的名字
+/// 会被当成终端显示 "rscat";伪装成 shell 后 fastfetch 会穿过它命中
+/// 链上真正的终端模拟器(kitty 等),连版本号都是真终端应答的。
 /// env:需要注入子进程的环境变量(SHELL 指向真实调用 shell、zsh 的 ZDOTDIR 等)。
 /// stop_file:会话标记文件;若给出且文件消失则结束(供 -a/-c 用)。
 /// 返回子进程退出码。
-pub fn run(cmd: &[String], env: &[(String, String)], flt: &mut LolcatFilter, stop_file: Option<&Path>) -> i32 {
+pub fn run(
+    cmd: &[String],
+    env: &[(String, String)],
+    comm: Option<&str>,
+    flt: &mut LolcatFilter,
+    stop_file: Option<&Path>,
+) -> i32 {
     if cmd.is_empty() {
         return 0;
     }
@@ -143,9 +172,7 @@ pub fn run(cmd: &[String], env: &[(String, String)], flt: &mut LolcatFilter, sto
                     CString::new(k.as_str()),
                     CString::new(v.as_str()),
                 ) {
-                    unsafe {
-                        libc::setenv(k.as_ptr(), v.as_ptr(), 1);
-                    }
+                    libc::setenv(k.as_ptr(), v.as_ptr(), 1);
                 }
             }
             libc::dup2(sfd, libc::STDIN_FILENO);
@@ -161,6 +188,10 @@ pub fn run(cmd: &[String], env: &[(String, String)], flt: &mut LolcatFilter, sto
         }
         // ---- 父进程 ----
         libc::close(sfd);
+        // 代理期间把 comm 伪装成调用 shell 的名字(见 run() 文档)
+        if let Some(c) = comm {
+            set_comm(c);
+        }
         libc::signal(libc::SIGINT, on_sigint as *const () as libc::sighandler_t);
         libc::signal(libc::SIGWINCH, on_sigwinch as *const () as libc::sighandler_t);
         GOT_SIGINT.store(false, Ordering::Relaxed);
@@ -313,6 +344,9 @@ pub fn run(cmd: &[String], env: &[(String, String)], flt: &mut LolcatFilter, sto
 
         if let Some(s) = saved {
             restore_stdin(&s);
+        }
+        if comm.is_some() {
+            set_comm("rscat"); // 还原进程名
         }
         libc::signal(libc::SIGINT, libc::SIG_DFL);
         libc::signal(libc::SIGWINCH, libc::SIG_DFL);
