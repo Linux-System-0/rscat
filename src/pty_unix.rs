@@ -166,7 +166,11 @@ pub fn run(
         if pid == 0 {
             // ---- 子进程 ----
             libc::setsid();
-            let _ = libc::ioctl(sfd, libc::TIOCSCTTY, 0); // musl 上 Ioctl=i32,glibc=u64,取平台原生类型
+            let _ = libc::ioctl(sfd, libc::TIOCSCTTY, 0);
+            // 新 pty 的前台进程组未设置(TIOCGPGRP=0):shell 检测到
+            // tcgetpgrp != pgrp 时会禁用行编辑并因 SIGTTIN 停住
+            // (症状:嵌套 bash/zsh 输入不显示,回车才执行)。
+            let _ = libc::tcsetpgrp(sfd, libc::getpgrp());
             for (k, v) in env {
                 if let (Ok(k), Ok(v)) = (
                     CString::new(k.as_str()),
