@@ -246,38 +246,27 @@ pub fn exec_argv(shell: &Shell, cmd: &[String]) -> Vec<String> {
 /// cp 一个 Arch 上不存在的推荐文件而报错),用 ZDOTDIR 指向带最小
 /// .zshrc 的临时目录压掉;用户已有 .zshrc 则不干预。
 pub fn session_argv(shell: &Shell) -> (Vec<String>, Vec<(String, String)>) {
-    let mut env: Vec<(String, String)> = vec![("SHELL".into(), shell.path.clone())];
-    let name = shell.name();
-    if name.eq_ignore_ascii_case("bash") {
-        // bash 无原生 OSC 133:PROMPT_COMMAND(提示符前=A)与
-        // PS0(命令执行前=C,输出区域开始)注入标记。
-        env.push((
-            "PROMPT_COMMAND".into(),
-            r#"printf "\033]133;A\007""#.into(),
-        ));
-        env.push(("PS0".into(), r#"\033]133;C\007"#.into()));
-    }
-    if name.eq_ignore_ascii_case("zsh") {
-        let has_rc = std::env::var("ZDOTDIR")
-            .ok()
-            .map(|d| !d.is_empty())
-            .unwrap_or(false)
-            || std::env::var("HOME")
-                .map(|h| Path::new(&h).join(".zshrc").exists())
-                .unwrap_or(false);
-        if !has_rc {
-            let dir = std::env::temp_dir().join(format!("rscat-zdot-{}", std::process::id()));
-            if std::fs::create_dir_all(&dir).is_ok()
-                && std::fs::write(
-                    dir.join(".zshrc"),
-                    "# by rscat: suppress zsh-newuser-install\n\
-                     precmd()  { printf \"\\033]133;D\\007\\033]133;A\\007\"; }\n\
-                     preexec() { printf \"\\033]133;C\\007\"; }\n",
-                )
-                .is_ok()
-            {
-                env.push(("ZDOTDIR".into(), dir.to_string_lossy().into_owned()));
-            }
+    let _ = shell;
+    let mut env: Vec<(String, String)> = vec![
+        // 会话内所有子 shell(含嵌套的 bash/zsh)统一发 OSC 133 标记:
+        // bash 用 PROMPT_COMMAND/PS0,zsh 用 ZDOTDIR 里的钩子,
+        // fish 用 config.fish 里的 RSCAT_SESSION 门控事件钩子。
+        ("SHELL".into(), shell.path.clone()),
+        ("PROMPT_COMMAND".into(), r#"printf "\033]133;A\007""#.into()),
+        ("PS0".into(), r#"\033]133;C\007"#.into()),
+    ];
+    // ZDOTDIR:压 zsh newuser 向导 + precmd/preexec 发标记;
+    // 用户的 ~/.zshrc 若存在则先 source,保留其配置。
+    let dir = std::env::temp_dir().join(format!("rscat-zdot-{}", std::process::id()));
+    if std::fs::create_dir_all(&dir).is_ok() {
+        let rc = concat!(
+            "# by rscat: suppress zsh-newuser-install + OSC 133 marks\n",
+            "[[ -f $HOME/.zshrc ]] && source $HOME/.zshrc\n",
+            "precmd()  { printf \"\\033]133;D\\007\\033]133;A\\007\"; }\n",
+            "preexec() { printf \"\\033]133;C\\007\"; }\n"
+        );
+        if std::fs::write(dir.join(".zshrc"), rc).is_ok() {
+            env.push(("ZDOTDIR".into(), dir.to_string_lossy().into_owned()));
         }
     }
     (vec![shell.path.clone()], env)
