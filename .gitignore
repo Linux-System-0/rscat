@@ -1,3 +1,13 @@
 /target/
+
+# 构建目录:打包脚本、平台交接文档、二进制、安装包一律不纳入版本控制。
+# 产物发布到 GitHub Releases;脚本与文档只存本地。
+/build/
+
+# 恢复/编辑器残留
+.DS_Store
 *.orig
 *.rej
+*.wixpdb
+._*
+*.sb-*

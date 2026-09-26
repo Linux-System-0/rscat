@@ -1,8 +1,8 @@
-rscat 0.1.0 —— 能输出图片的 lolcat(Rust 重写)
+rscat 1.1.6-5 —— 能输出图片的 lolcat(Rust 重写)
 彩虹算法与 lolcat 100.0.1 逐字节一致,另支持图片直通与伪终端运行模式。
 
 用法:
-  somecmd | rscat                 过滤模式:彩虹化 stdin(等价 lolcat)
+  somecmd | rscat                 过滤模式:彩虹化 stdin(等价 lolcat;图片单元——自带颜色的块元素字符——保持原色)
   rscat FILE...                   彩虹化文本文件
   rscat -e fastfetch              运行模式:伪终端里跑命令,图片+彩虹字兼得
   rscat -e fish -e f              运行模式也能包 shell 函数

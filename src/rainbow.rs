@@ -2,6 +2,10 @@
 //!   rainbow(freq, i) 的 sin 三相移公式(截断取整),
 //!   Paint gem 的 rgb_to_256 灰度/立方体量化,
 //!   配对模型(转义连跑+单字符,逐配对 \e[39m 复位)。
+//!
+//! 本文件是从 lolcat 移植的衍生作品,受其 BSD-3-Clause 许可约束
+//! (Copyright (c) 2016, moe@busyloop.net);完整许可原文与再分发要求见
+//! 仓库根目录的 THIRD-PARTY.md。rscat 自身新增部分按 MIT 授权,见 LICENSE。
 
 use std::collections::HashMap;
 use std::f64::consts::PI;
@@ -44,7 +48,16 @@ pub enum ColorMode {
 }
 
 impl ColorMode {
-    /// 与 lol.rb#set_mode 一致:-t 强制真彩,否则看 COLORTERM,再否则 256 色。
+    /// 默认真彩,与 lolcat 一致。
+    ///
+    /// 参考实现(lol.rb 100.0.1 与用户 pwsh 里的 lolcat 1.0.7 PowerShell 版)
+    /// 都直接输出 `\e[38;2;R;G;B;1m`:每字符独立 24 位颜色,才是连续的彩虹渐变。
+    /// 若在 COLORTERM 未设置时回退 256 色,相邻字符会量化到同一个 256 色号
+    /// (实测每 6~9 个字符才跳一格),看起来就是"一块一块的纯色"而非渐变——
+    /// Windows Terminal / WezTerm / kitty 均支持真彩,没有理由降级。
+    ///
+    /// COLORTERM 显式声明不支持真彩(如 "256color")时才用 256 色兜底;
+    /// `-t` 仍可强制真彩。
     pub fn detect(force_truecolor: bool) -> ColorMode {
         if force_truecolor {
             return ColorMode::True;
@@ -52,13 +65,14 @@ impl ColorMode {
         match std::env::var("COLORTERM") {
             Ok(v) => {
                 let t = v.trim().to_lowercase();
-                if t == "truecolor" || t == "24bit" {
-                    ColorMode::True
-                } else {
+                // 显式声明为 256 色终端时降级,其余(含未设置)一律真彩
+                if t.contains("256") {
                     ColorMode::C256
+                } else {
+                    ColorMode::True
                 }
             }
-            Err(_) => ColorMode::C256,
+            Err(_) => ColorMode::True,
         }
     }
 }

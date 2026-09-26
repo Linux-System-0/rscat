@@ -1,163 +1,388 @@
 # rscat 🌈🐱
 
-**能输出图片的 lolcat** — Rust 重写,彩虹算法与 `lolcat` 逐字节一致,另支持 kitty / iTerm2 图片直通、伪终端运行模式与彩虹会话。
+[**English**](README.md) | [**简体中文**](README.zh-CN.md)
 
-**lolcat that can output images** — rewritten in Rust, byte-for-byte rainbow compatible with `lolcat`, plus kitty/iTerm2 image passthrough, PTY run mode and rainbow sessions.
+![](ass/nom.jpg)
 
-> 起源:前身 `nyacat`(Python 单文件)为解决 `fastfetch | lolcat` 不能同时显示图片和彩虹字而写;本仓库是其 Rust 重写与正式工程化版本(Python 原型已退役移除)。
-> Origin: predecessor `nyacat` (single-file Python) was written so `fastfetch` can show images *and* rainbow text at once; this repo is its Rust rewrite and productionized version (the Python prototype has been retired).
+## What?
 
----
+`rscat` brings **image output to [lolcat](https://github.com/busyloop/lolcat)** — and
+does it as a **cross-platform** tool.
 
-## 特性 Features
+lolcat rainbowizes text; it has no concept of pictures. Pipe **any** image-capable
+tool into it — a system-info fetch, an image viewer, a plotter, a preview
+utility — and the picture is destroyed: the graphics sequence may not survive the
+pipe at all, and whatever does arrive gets painted over cell by cell. `rscat`
+keeps the rainbow **and** the picture in the same stream, so anything that draws
+becomes rainbow-safe.
 
-| | 中文 | English |
-|---|---|---|
-| 彩虹过滤 | 与 lolcat 100.0.1 **逐字节一致**(8 组对照+真彩/256色全通过) | Byte-for-byte compatible with lolcat 100.0.1 |
-| 图片直通 | kitty 图形协议 / sixel / OSC 原样透传,不破坏图片 | kitty graphics / sixel / OSC passthrough, images intact |
-| 运行模式 | `rscat -e fastfetch`:伪终端里跑命令,**图片+彩虹兼得**,无需包装命令 | `rscat -e fastfetch`: run in a pty, images + rainbow, no wrapper needed |
-| 图片模式 | `rscat logo.png`:直接显示本地图片(PNG/JPEG/GIF) | `rscat logo.png`: display local images directly |
-| 彩虹会话 | `rscat -a` 之后所有命令彩虹输出,`rscat -c` 取消 | `rscat -a`: all later commands rainbow, `rscat -c` cancels |
-| 多语言 | 简中/繁中/英文/日文,跟随系统 `LANG`,可 `--lang` 指定 | zh-CN/zh-TW/en/ja, follows system `LANG` |
-| 调用 shell 检测 | `-e`/`-a` 自动识别父进程里的真实 shell(fish/zsh/bash…),fastfetch 的 SHELL 模块显示本尊而非 rscat | Detects the real calling shell from the parent chain, so fastfetch's SHELL module shows fish/zsh/bash instead of rscat |
-| 多 shell | bash / zsh / sh / fish / PowerShell / cmd 集成片段 | Integration snippets for 6 shells |
-| 跨平台 | Linux(已测) / FreeBSD / macOS / Windows(见平台矩阵) | Linux (tested) / FreeBSD / macOS / Windows (see matrix) |
+- **Rainbow first.** The colouring is byte-for-byte compatible with lolcat 100.0.1 —
+  same options, same output, drop-in replacement.
+- **Image-aware.** Graphics protocols and picture cells pass through untouched.
+- **Cross-platform.** Linux, macOS, FreeBSD and Windows from one Rust codebase —
+  see the [platform matrix](#platform-support).
 
----
+It is a Rust rewrite of an earlier single-file Python tool called `nyacat`.
 
-## 安装 Install
+## Why rscat exists
+
+Rainbow colorizers treat a terminal stream as plain text. Anything that draws
+*pixels* — kitty graphics, sixel, iTerm2 inline images, or block characters like
+`█▀▄▌▐░▒▓` used to fake an image in text — is either mangled or colourised into
+nonsense. That is fine for `cat`, and fatal for a logo.
+
+`rscat` is built around the opposite assumption: it understands the escape stream
+well enough to tell **pixels from text**, and colours only the text.
+
+## Demo
+
+The difference shows up the moment a tool emits both a picture and text. Anything
+that draws to the terminal is fair game:
 
 ```bash
-# 构建(需 Rust 1.70+)
-cargo build --release
-# 安装到 ~/.local/bin
-install -Dm755 target/release/rscat ~/.local/bin/rscat
+# system-info fetches with a logo
+fastfetch | rscat
+neofetch | rscat
 
-# shell 集成(可选,仅把 ~/.local/bin 加入 PATH,幂等)
-rscat --init fish >> ~/.config/fish/config.fish   # fish
-rscat --init bash >> ~/.bashrc                     # bash
-rscat --init zsh >> ~/.zshrc                       # zsh
-rscat --init sh >> ~/.profile                      # sh
-rscat --init powershell >> $PROFILE                # PowerShell
-rscat --init cmd > %TEMP%\rscat-init.cmd & %TEMP%\rscat-init.cmd   # cmd(运行一次)
+# image viewers and previewers
+chafa photo.png | rscat
+viu artwork.jpg | rscat
+
+# anything that plots or renders, including your own scripts
+my-plot-script.py | rscat
 ```
 
-Windows:把 `target\release\rscat.exe` 放到 `%USERPROFILE%\.local\bin\`,用上面 `--init` 片段加 PATH。
-macOS/FreeBSD:同 Linux 流程构建(纯 portable Unix 代码,无系统依赖)。
+Without rscat the picture is colourised into noise or lost entirely; with it the
+picture survives and the text is rainbow.
 
----
-
-## 用法 Usage
+Three ways to use it:
 
 ```bash
-# 1. 过滤模式(等价 lolcat)
-neofetch | rscat
-rscat file.txt
+rscat logo.png          # image mode: draw a PNG/JPEG/GIF directly
+some-command | rscat    # filter mode: rainbowize a stream, images intact
+rscat -e fastfetch      # run mode: run a command in a pty, images + rainbow together
+```
 
-# 2. 运行模式:fastfetch 图片 + 彩虹字(本体 -e 旗标,不再需要 nfa 包装)
+> **One caveat on pipes.** A tool that checks whether stdout is a terminal may
+> skip image output when piped. fastfetch is the common case. Installing a package
+> wires this up for you (see [Installation](#installation)); from source, `rscat --init`
+> once and it is handled: the snippet defines a small `fastfetch` wrapper that
+> appends `--pipe false` **only when the pipeline's reader really is `rscat`**:
+>
+> ```bash
+> fastfetch | rscat        # images + rainbow, no flags needed
+> fastfetch | lolcat       # untouched — that reader isn't rscat
+> fastfetch > out.txt      # no image escapes written into the file
+> fastfetch                # untouched (fastfetch already draws on a tty)
+> ```
+>
+> The check is deliberately narrow: `--pipe false` is *not* added merely because
+> stdout is a pipe (that would change the behaviour of `fastfetch | lolcat` or
+> `fastfetch | grep`). The wrapper is defined for bash, zsh, sh and fish. Use
+> `command fastfetch` to bypass it, or pass `--pipe` yourself and nothing is
+> appended. If some other tool hides its images when piped and has no such flag,
+> use `rscat -e <tool>` instead, which gives it a real pty.
+
+## Features
+
+| | |
+|---|---|
+| **lolcat-compatible rainbow** | Byte-for-byte identical to lolcat 100.0.1 (verified against 8 reference cases, truecolor and 256-color). Truecolor by default, so the gradient is smooth per character rather than banded. |
+| **Image passthrough** | kitty graphics protocol / sixel / iTerm2 OSC sequences are forwarded verbatim, so images are never corrupted. |
+| **Picture cells preserved** | Block characters carrying their own colour — how `fastfetch`, `chafa` and friends draw images in a text terminal — pass through untouched. Text, including ASCII-art logos, still gets the rainbow. |
+| **Cross-platform** | One codebase, four platforms: Linux, macOS, FreeBSD, Windows. Native installers and packages for each. |
+| **Run mode** | `rscat -e <command>` — run anything in a pty and get images *and* rainbow text, no wrapper needed, no per-tool flags. |
+| **Image mode** | `rscat logo.png` — display a local image directly (PNG/JPEG/GIF). |
+| **Rainbow session** | `rscat -a` makes every later command rainbow; `rscat -c` cancels. |
+| **Multilingual** | English / 简体中文 / 繁體中文 / 日本語, follows system `LANG`, or `--lang`. |
+| **Calling-shell detection** | `-e`/`-a` find the real shell in the parent chain, so a fetch tool's SHELL module shows fish/zsh/bash instead of `rscat`. |
+| **Six shells** | Integration snippets for bash, zsh, sh, fish, PowerShell and cmd. |
+
+## Platform support
+
+| Platform | filter | image | `-e` run | `-a` session | Notes |
+|---|---|---|---|---|---|
+| Linux | ✅ tested | ✅ tested | ✅ tested | ✅ tested | primary development target |
+| FreeBSD | ✅ expected | ✅ expected | ✅ expected | ✅ expected | packages provided (14.4 baseline, amd64/arm64), awaiting on-hardware verification |
+| macOS | ✅ expected | ✅ expected | ✅ expected | ✅ expected | as above; `--proto iterm` for iTerm2/WezTerm |
+| Windows | ✅ tested | ✅ tested (WezTerm + `--proto iterm`) | ❌ errors clearly | ❌ errors clearly | `-e`/`-a` need ConPTY, planned for a later release; rscat reports the limitation instead of emitting garbage |
+
+"Expected" means the code only uses POSIX APIs common to those platforms (via
+`libc`), but hasn't been verified on real hardware yet — issues welcome.
+
+## Installation
+
+Prebuilt binaries for every supported platform are published on the
+[**Releases page**](../../releases). Download the file for your platform:
+
+| Platform | Architecture | File |
+|---|---|---|
+| Linux | x86_64 | `rscat-1.1.6-5-x86_64.pkg.tar.zst` / `rscat_1.1.6-5_amd64.deb` / `rscat-1.1.6-5.x86_64.rpm` |
+| Linux | aarch64 | `rscat-1.1.6-5-aarch64.pkg.tar.zst` / `rscat_1.1.6-5_arm64.deb` / `rscat-1.1.6-5.aarch64.rpm` |
+| FreeBSD | amd64 | `rscat-1.1.6-5-freebsd-amd64.pkg` |
+| FreeBSD | arm64 | `rscat-1.1.6-5-freebsd-arm64.pkg` |
+| macOS | arm64 | `rscat-1.1.6-5-macos-aarch64.pkg` |
+| macOS | x86_64 | `rscat-1.1.6-5-macos-x86_64.pkg` |
+| Windows | x86_64 | `rscat-1.1.6-5-windows-x86_64-setup.exe` (installer) / `.msi` |
+| Windows | aarch64 | `rscat-1.1.6-5-windows-aarch64.zip` (portable) |
+
+### Linux
+
+```bash
+sudo pacman -U rscat-1.1.6-5-x86_64.pkg.tar.zst    # Arch / CachyOS
+sudo apt install ./rscat_1.1.6-5_amd64.deb        # Debian / Ubuntu
+sudo rpm -Uvh rscat-1.1.6-5.x86_64.rpm            # Fedora / openSUSE
+```
+
+### FreeBSD
+
+```bash
+pkg add ./rscat-1.1.6-5-freebsd-amd64.pkg
+```
+
+### macOS
+
+```bash
+sudo installer -pkg rscat-1.1.6-5-macos-aarch64.pkg -target /   # Apple Silicon
+sudo installer -pkg rscat-1.1.6-5-macos-x86_64.pkg  -target /   # Intel
+```
+
+### Windows
+
+Run the installer, or install the MSI from a terminal:
+
+```powershell
+.\rscat-1.1.6-5-windows-x86_64-setup.exe        # Inno Setup installer
+msiexec /i rscat-1.1.6-5-windows-x86_64.msi     # WiX MSI
+```
+
+Both put `rscat` in `Program Files\rscat`, add it to your user `PATH` (removed
+again on uninstall), and ship the shell snippets in `shells\`. The ARM64 zip is
+portable — unzip it anywhere and run `rscat.exe`.
+
+### Shell integration is wired automatically on Linux, FreeBSD and macOS
+
+The Linux, FreeBSD and macOS packages run a post-install hook that connects the
+snippets to your shells, so `fastfetch | rscat` works with images immediately —
+no manual `--init` step:
+
+| Target | Linux | FreeBSD | macOS | What it covers |
+|---|:--:|:--:|:--:|---|
+| `~/.bashrc` | ✅ | ✅ | ✅ | interactive **non-login** bash |
+| `~/.bash_profile` | — | — | ✅ | macOS *login* bash (which never reads `~/.bashrc`) |
+| `~/.zshrc` | ✅ | ✅ | ✅ | interactive zsh |
+| `~/.profile` | ✅ | ✅ | ✅ | login `sh`, and login bash without a `~/.bash_profile` |
+| `~/.shrc` | ✅ | ✅ | — | interactive **non-login** `sh` (Linux `sh` reads `$ENV`; macOS's does not) |
+| `~/.config/fish/conf.d/rscat.fish` | ✅ | ✅ | ✅ | fish — auto-loaded, no rc edit |
+| `/etc/profile.d/rscat.sh` | ✅ | ✅ | — | every account's login shells, including accounts created later |
+| `/etc/zshenv` | — | — | ✅ | macOS system-wide, so `sudo -i`-style shells are covered too |
+| fish vendor/site `conf.d` | ✅ | ✅ | ✅ | system-wide fish |
+
+Rules it follows: it never overwrites your rc — it appends one fenced block
+(`# >>> rscat shell integration >>>` … `# <<< … <<<`) that you can delete by hand,
+keeping a `<rc>.rscat-bak` copy the first time; it is idempotent, so reinstalling
+never stacks duplicates; and every step is non-fatal, so a hook failure can never
+break a transaction. Uninstalling removes the block and the drop-in files again.
+
+It also creates a missing rc (`~/.zshrc`, `~/.bash_profile`, `~/.profile`) when
+that shell is the account's login shell, so a brand-new machine works too.
+
+The snippets are sourced *by reference* (`[ -r /usr/share/rscat/shells/rscat.bash ] && . …`),
+so upgrading the package updates the integration without touching your rc files.
+(One exception: the fish `conf.d` snippet is a *copy*, not a reference.)
+
+The Windows installers ship the snippets in `shells\` but do not wire rc files —
+there, source the snippet yourself (next section).
+
+### From source
+
+```bash
+cargo build --release
+install -Dm755 target/release/rscat ~/.local/bin/rscat
+```
+
+Optional shell integration (idempotent — it sets up `PATH` and the `fastfetch`
+wrapper described above):
+
+```bash
+rscat --init fish >> ~/.config/fish/config.fish   # fish
+rscat --init bash >> ~/.bashrc                    # bash
+rscat --init zsh  >> ~/.zshrc                     # zsh
+rscat --init sh   >> ~/.shrc                      # sh  (interactive sh reads $ENV)
+rscat --init powershell >> $PROFILE               # PowerShell
+```
+
+
+> **Note on build artifacts.** Published binaries and installers live on the
+> [GitHub Releases](../../releases) page. The entire `build/` directory is
+> git-ignored — packaging scripts, hand-off prompts, binaries and installers are
+> all kept local only.
+
+## Usage
+
+```bash
+# 1 run mode: run any command in a pty — images AND rainbow text
 rscat -e fastfetch
 
-# 3. 图片模式:直接显示图片
-rscat ~/.config/fastfetch/nyarch-logo.png
+# 2 image mode: display an image directly
+rscat logo.png
 
-# 4. 彩虹会话:之后所有命令输出都是彩虹色
+# 3 rainbow session: everything after this is rainbow
 rscat -a
-# ... 随便跑命令,全是彩虹 ...
-rscat -c     # 或输入 exit,退出会话
+rscat -c     # or type exit
 ```
 
-> **`fastfetch | rscat` 直接就有图片+彩虹(fish 已内置):**
-> **`fastfetch | rscat` just works out of the box (fish integration included):**
-> ```fish
-> # config.fish 已定义同名函数:stdout 是管道时自动追加 --pipe false
-> # A same-named function in config.fish appends --pipe false when stdout is piped
-> fastfetch | rscat        # 图片 + 彩虹字,一次到位 / images + rainbow in one pipe
-> ```
-> 管道里默认看不到图片是 fastfetch 的 isatty 检查(stdout 非终端就不发图片数据)。`--pipe false` 强行关闭该检测:图片 APC、布局定位序列全部照发,rscat 负责染彩虹、放行图片序列(实测 kitty-direct 路径传输 + 625 处彩虹码共存)。非 fish 用户手动加 `--pipe false` 即可;重定向到文件时想要纯净输出用 `command fastfetch`。
-> fastfetch skips image emission when stdout is not a tty; `--pipe false` overrides that. Non-fish users: add the flag manually. Use `command fastfetch` for clean redirects.
+Same options as lolcat (`-p/-F/-S/--animate/-d/-s/-i/-t/-f`) plus `-e/--exec`,
+`-a/--always`, `-c/--cancel`, `--proto`, `--image`, `--init`, `--lang`.
+Full multilingual help: `rscat -h`.
 
-> **fastfetch logo 类型建议:用 `kitty`,别用 `kitty-direct`**(血泪结论,见下)。
-> **fastfetch logo type: prefer `kitty` over `kitty-direct`** (hard-won, see below).
+### Tools that hide their images when piped
 
-选项与 lolcat 相同(`-p/-F/-S/--animate/-d/-s/-i/-t/-f`),另加 `-e/--exec`、`-a/--always`、`-c/--cancel`、`--proto`、`--image`、`--init`、`--lang`。完整多语言帮助见 `rscat -h`。
-Same options as lolcat plus rscat extras. Full multilingual help: `rscat -h`.
-
----
-
-## 平台支持矩阵 Platform matrix
-
-| 平台 Platform | 过滤 filter | 图片 image | 运行 `-e` run | 会话 `-a` session | 说明 Notes |
-|---|---|---|---|---|---|
-| Linux | ✅ 已测 | ✅ 已测 | ✅ 已测 | ✅ 已测 | CI/日常主力 |
-| FreeBSD | ✅ 预期 | ✅ 预期 | ✅ 预期 | ✅ 预期 | 已提供交叉编译包(14.3,amd64/arm64),待实机验证 |
-| macOS | ✅ 预期 | ✅ 预期 | ✅ 预期 | ✅ 预期 | 同上;`--proto iterm` 适配 iTerm2/WezTerm |
-| Windows | ✅ | ✅(wezterm+iterm) | ❌ 明确报错 | ❌ 明确报错 | ConPTY 后续版本;不过滤乱码,直接多语言提示 |
-
-“预期”=“代码仅用三平台通用 POSIX 接口(libc),但作者暂无实机验证,欢迎报 issue”。
-"Expected" = code only uses POSIX APIs common to all three (via `libc`), but the author has no test machine yet — issues welcome.
-
----
-
-## 预编译包 Prebuilt packages
-
-见 [`build/`](build/) 目录(本机 x86_64 构建三格式;aarch64 与跨平台见下):
-
-See [`build/`](build/) (local x86_64 builds; aarch64 and cross-platform below):
-
-```
-build/x86_64/rscat-0.1.0-1-x86_64.pkg.tar.gz   # Arch / CachyOS: pacman -U
-build/x86_64/rscat_0.1.0-1_amd64.deb           # Debian/Ubuntu: dpkg -i 或 apt install ./…
-build/x86_64/rscat-0.1.0-1.x86_64.rpm          # Fedora/openSUSE: rpm -Uvh
-```
-
-```
-build/freebsd/rscat-0.1.0-freebsd-amd64.pkg    # pkg add ./rscat-0.1.0-freebsd-amd64.pkg (FreeBSD 14+)
-build/freebsd/rscat-0.1.0-freebsd-arm64.pkg
-```
-aarch64 Linux 与 macOS/Windows/FreeBSD 的构建方式见 [build/README.md](build/README.md)。
-For aarch64 Linux and macOS/Windows/FreeBSD builds, see [build/README.md](build/README.md).
-
----
-
-## 与前身差异 Differences from nyacat (Python)
-
-1. **修了 `-c`/`-e` 图片文字错位 bug**(两张截屏的症状),分两层:
-   - **termios 层**:运行模式曾对子伪终端和用户终端用 `setraw()`,关掉 `ONLCR`,裸 `\n` 不回车致楼梯式散架。现子端保持 cooked 只关 `ECHO`,用户端只关 `ICANON/ECHO`。
-   - **协议层**(真凶):`kitty-direct` 传的是**文件路径**,fastfetch 必须发 `\x1b[6n` 查光标才知道图片占了几行;而 fastfetch 只等 **50–100ms**(实测阈值),经代理转发的应答稍慢就超时回退,文字掉到图片下方。改用 `kitty` 类型后传的是 **RGBA+zlib 内联数据**,fastfetch 用确定性 `\x1b[15A` cursor-up 排版,**零终端查询、零竞态**,经任何代理版面都不散。
-   **Fixed the image/text misalignment in two layers**: (1) termios — `setraw()` killed `ONLCR` causing staircase; now cooked-minus-ECHO / cbreak-input-only. (2) protocol (the real culprit) — `kitty-direct` transmits a *file path* so fastfetch must query the cursor (`\x1b[6n`) to learn the image height, but only waits **~50–100ms** (measured); a slightly-slow proxied answer times out and text falls below the image. The `kitty` type sends *inline RGBA+zlib* with deterministic `\x1b[15A` layout — **zero queries, zero race**, stable through any proxy.
-2. **修了 `--animate` 必崩 bug**:Python 版 `self.line = bytearray()` 却 `append((run, char))`,一用就 `TypeError`。Rust 版正常实现。
-   **Fixed `--animate` always crashing** (bytearray.append(tuple) TypeError). Implemented correctly in Rust.
-3. `-a` 会话/`-c` 取消是新增功能(Python 版没有);`-e` 取代 Python 版 `-c`(因 `-c` 已给“取消”);`--animate` 因此只有长选项。
-   `-a`/`-c` sessions are new; `-e` replaces Python's `-c`; `--animate` is long-only now.
-4. 非 PNG 转码由 Pillow 换成 `image` crate(纯 Rust,无系统依赖);重采样器不同导致像素均值差约 2%(肉眼不可辨),尺寸/协议帧完全一致。
-   Non-PNG transcode moved from Pillow to the `image` crate (pure Rust); resampler differs slightly (~2% mean pixel diff, invisible), dimensions/framing identical.
-5. **调用 shell 检测**(0.1.0 第二轮修复):fastfetch 按父进程报告 SHELL,直接 spawn 会显示 "rscat"。现从 `/proc` 父链识别真实调用 shell:`-e` 用它包一层 `-c`(bash/zsh 追加 `; exit $?` 破掉末尾单命令 exec 优化并保退出码),`-a` 会话直接用同款 shell;子进程 `SHELL` 环境变量同步指向它。
-   **Calling-shell detection** (second fix round): fastfetch reports SHELL from the parent process; rscat now detects the real shell from `/proc` parent chain and wraps `-e` commands with it (`; exit $?` defeats bash/zsh tail-exec optimization while preserving exit codes), uses the same shell for `-a` sessions, and points the child's `SHELL` env at it.
-6. **zsh 首次向导压制**:`-a` 起 zsh 会话且无 `~/.zshrc` 时,`zsh-newuser-install` 向导会刷屏并向导选项 2 在 Arch 上 `cp` 不存在的推荐文件报错。现用临时 `ZDOTDIR`(含最小 `.zshrc`)压掉,已有配置则不干预。
-   **zsh first-run wizard suppressed**: with no `~/.zshrc`, the `zsh-newuser-install` wizard spams the session (and its option 2 errors on Arch). A temp `ZDOTDIR` with a minimal `.zshrc` suppresses it; untouched if the user already has one.
-7. **TER/TFO 模块显示 "rscat"/消失**:fastfetch 的终端模块跳过 shell 祖先后取第一个非 shell 进程当终端,rscat 正好卡位;终端认错后 TerminalFont 也跟着消失。现代理期间把 rscat 的进程名(comm)临时伪装成调用 shell,fastfetch 穿过它命中链上真实终端(kitty 等,版本号由真终端应答 XTVERSION),退出后还原。
-   **TER/TFO showing "rscat"/missing**: fastfetch's terminal module treats the first non-shell ancestor as the terminal — which was rscat itself — and TerminalFont vanished with it. During proxied runs rscat now masquerades its comm as the calling shell so fastfetch walks through to the real terminal (kitty, whose XTVERSION answer carries the version), restoring the original comm afterwards.
-8. **终端标题与字体状态残留**:`-e`/`-a` 退出后终端标题显示 "rscat"、字体/字符集状态可能被子进程带偏。现在进入 pty 模式前压栈标题(CSI 22;2t),退出后弹栈(CSI 23;2t)+ DECSTR 软复位 + 字符集/主字体复位;会话取消路径额外清零 kitty 键盘协议。
-   **Terminal title & font state restoration**: on exiting `-e`/`-a` the title showed "rscat" and charset/font state could drift. rscat now pushes the title stack on entry, pops it plus DECSTR/charset/primary-font reset on exit, and zeroes the kitty keyboard protocol after cancelled sessions.
-
----
-
-## 开发 Development
+Some tools check whether stdout is a terminal and skip image output when it isn't.
+fastfetch is the common case — it needs `--pipe false`(has fixed)
 
 ```bash
-cargo test          # 单元测试:彩虹向量/base64/PNG头/魔数
+fastfetch --pipe false | rscat
+```
+
+If a tool has no such flag, or you'd rather not think about it, use run mode
+instead. `rscat -e` gives the command a real pty, so its own terminal detection
+succeeds and it draws normally:
+
+```bash
+rscat -e chafa photo.png
+rscat -e fastfetch
+```
+
+For a clean redirect to a file, bypass rscat entirely (`command fastfetch`, or
+just run the tool without a pipe).
+
+## How it works
+
+`rscat` parses the escape stream instead of treating it as bytes. Two kinds of
+thing are recognised as *not text* and are forwarded verbatim:
+
+- **Graphics protocols** — kitty APC, sixel DCS, iTerm2 OSC 1337. These are
+  emitted the instant the sequence completes, so a program waiting on a terminal
+  reply never deadlocks.
+- **Picture cells** — block characters (`█▀▄▌▐░▒▓` and friends) that carry their
+  own colour. This is how tools like `fastfetch` and `chafa` render an image
+  using nothing but text, one coloured cell per pixel. Each such cell is passed
+  through with its original colour intact.
+
+Everything else — including ASCII-art logos made of `/`, `#` or box-drawing
+characters — is ordinary text and gets the rainbow. That distinction is what lets
+any drawing tool show its picture *and* rainbow text in one pass, on any platform,
+without knowing anything about that particular tool.
+
+`-a` sessions add one more layer: the shell inside the session emits OSC 133
+prompt marks, so the prompt and your own typed command line pass through
+unrainbowed while command *output* is coloured. Terminal capability queries are
+handled by the proxy itself where forwarding them would mislead the child (see
+item 10 below), and the stream is forwarded unbuffered so a program waiting on a
+terminal reply can never deadlock.
+
+## Differences from nyacat (the Python predecessor)
+
+1. **Fixed the image/text misalignment bug** in two layers. (a) termios: run mode
+   used `setraw()` on both the child pty and the user terminal, clearing `ONLCR`
+   so bare `\n` didn't return the carriage and output fell down the screen like a
+   staircase; the child now stays cooked with only `ECHO` off. (b) protocol (the
+   real culprit): `kitty-direct` transmits a *file path*, so fastfetch must query
+   the cursor (`\x1b[6n`) to learn the image height — but it only waits ~50–100 ms,
+   and a slightly slow proxied reply times out and the text lands below the image.
+   The `kitty` type sends inline RGBA+zlib with deterministic cursor-up layout:
+   zero queries, zero race.
+2. **Fixed `--animate` always crashing** — the Python version called
+   `bytearray.append(tuple)`, a guaranteed `TypeError`. Implemented properly in Rust.
+3. **`-a` sessions / `-c` cancel are new**; `-e` replaces Python's `-c`.
+4. **Non-PNG transcoding** moved from Pillow to the `image` crate (pure Rust, no
+   system dependencies). A different resampler changes mean pixel values by ~2%
+   (invisible); dimensions and protocol framing are identical.
+5. **Calling-shell detection** — fastfetch reports SHELL from the parent process,
+   so a direct spawn showed `rscat`. rscat now walks the kernel parent chain to
+   find the real shell and wraps the command with it.
+6. **zsh first-run wizard suppressed** — with no `~/.zshrc`, `zsh-newuser-install`
+   would flood a session; a temporary `ZDOTDIR` with a minimal `.zshrc` prevents it.
+7. **TER/TFO modules showing `rscat` or vanishing** — fastfetch's terminal module
+   takes the first non-shell ancestor as the terminal, which was rscat itself.
+   rscat now temporarily masquerades its `comm` as the calling shell so fastfetch
+   reaches the real terminal.
+8. **Terminal title and font state restored** on exit from `-e`/`-a`.
+9. **`Enter` works in a `-a` session under fish.** The proxy used to read the real
+   terminal with `ICRNL` still set, so the kernel rewrote the user's `CR` into
+   `LF` before forwarding. bash/zsh accept either, but fish does its own line
+   editing and treats `LF` as *insert a newline* — so Enter only ever wrapped.
+   `stdin_cbreak()` now clears `ICRNL` too, letting the raw `CR` through; the
+   child pty's own `ICRNL` still converts it for programs that aren't in raw mode.
+10. **The proxy answers terminal capability queries itself.** fish 4.x asks
+    whether the terminal supports the kitty keyboard protocol (`CSI ? u`). Passed
+    through, a real kitty answers "yes" — but rscat forwards keystrokes verbatim
+    and never re-encodes them as `CSI-u`, so fish then waited for key events that
+    could never arrive. rscat now intercepts that one query and replies
+    `CSI ? 0 u`. It deliberately does **not** touch XTVERSION or DECRQM, which the
+    real terminal answers correctly and where a proxy reply would be wrong.
+11. **Piped image output is wired up on install, and only where it should be.**
+    The `fastfetch` wrapper appends `--pipe false` solely when the pipeline's
+    reader is actually `rscat` — determined by matching the `pipe:[inode]` of the
+    current stdout against each process's `fd/0` (and, for fish, by scanning the
+    main process's children, since fish runs pipeline functions in-process with
+    buffered output). An earlier attempt keyed on process groups, which is
+    silently wrong under job control: shells put each pipeline in its own group,
+    while `$$` inside a piped function still names the main shell.
+
+## Development
+
+```bash
+cargo test          # 24 tests: rainbow vectors, base64, PNG header, magic
+                    # numbers, filter, PTY (termios + query interception)
 cargo build --release
-install -Dm755 target/release/rscat ~/.local/bin/rscat
 ```
 
-项目结构 Layout:
-
 ```
-src/            main.rs(CLI) rainbow.rs filter.rs image.rs shell_detect.rs
+src/            main.rs (CLI) rainbow.rs filter.rs image.rs shell_detect.rs
                 pty_unix.rs pty_windows.rs persist.rs i18n.rs shell.rs
-                help_{zh_cn,zh_tw,en,ja}.txt
-shells/         rscat.{bash,zsh,sh,fish,ps1,cmd}(--init 输出的正本)
-build/          预编译包(见上)与跨平台构建说明
+                help_{en,zh_cn,zh_tw,ja}.txt
+shells/         rscat.{bash,zsh,sh,fish,ps1,cmd} — the --init sources, and what
+                the Linux/FreeBSD packages wire into your shells on install
+build/          packaging recipes + per-platform hand-off prompts (git-ignored)
+ass/            artwork
 ```
 
-License:待定 TBD.
+Platform-specific code is isolated: `pty_unix.rs` / `pty_windows.rs` and the
+`cfg(unix)` / `cfg(windows)` pairs in `persist.rs`. Everything else — the filter,
+the rainbow engine, the CLI — is shared, so a fix in the colour path benefits
+every platform at once.
+
+### Where the shell integration lives
+
+Two layers, worth keeping in sync when you touch either:
+
+| Layer | Files | What it does |
+|---|---|---|
+| Snippet *bodies* | `shells/rscat.*` | Define the `PATH` setup, the `fastfetch` wrapper, and (for the packaged case) the `.source`-able content. Compiled into the binary via `include_str!`, so `rscat --init <shell>` prints exactly these. |
+| Wiring into users' shells | `build/linux/scripts/post-install`, `build/linux/scripts/pre-remove`, `build/macos/scripts/postinstall`, `build/rebuild-freebsd-packages.sh` | Run by the package manager to source those snippets from the right rc file for each shell, and to undo it on uninstall. |
+
+Because the snippets are sourced *by reference*, editing a snippet file and
+rebuilding the package is enough to update every user — no rc rewriting needed.
+
+## Credits
+
+The cat artwork (`ass/nom.jpg`) is from
+[lolcat](https://github.com/busyloop/lolcat) by
+[moe@busyloop.net](mailto:moe@busyloop.net) — the project this one is compatible
+with and owes its rainbow to. The rainbow algorithm is a Rust port of lolcat's,
+verified to produce byte-identical colour output.
+
+## License
+
+[MIT](LICENSE) © 2026 macOS Terminal. The colour code ported from lolcat and the
+bundled cat artwork remain under lolcat's **BSD-3-Clause** license.
+
+See [`THIRD-PARTY.md`](THIRD-PARTY.md) for that license text, the crates linked,
+and what redistributors need to carry along.
+
+Every package ships both files, so a binary install carries the notices BSD-3
+requires: `/usr/share/licenses/rscat/` (Arch, RPM), `/usr/share/doc/rscat/`
+(Debian) or `/usr/local/share/licenses/rscat/` (FreeBSD) and
+`/usr/local/share/doc/rscat/` (macOS).

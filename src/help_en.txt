@@ -1,9 +1,9 @@
-rscat 0.1.0 — lolcat that can output images (rewritten in Rust)
+rscat 1.1.6-5 — lolcat that can output images (rewritten in Rust)
 Rainbow algorithm is byte-for-byte compatible with lolcat 100.0.1,
 plus image passthrough and pseudo-terminal run mode.
 
 Usage:
-  somecmd | rscat                 filter mode: rainbowize stdin (like lolcat)
+  somecmd | rscat                 filter mode: rainbowize stdin (like lolcat; image cells - block chars with their own colour - are kept as-is)
   rscat FILE...                   rainbowize text files
   rscat -e fastfetch              run mode: run a command in a pty, images + rainbow text
   rscat neko.png [mimi.jpg ...]   image mode: display images + rainbow file names

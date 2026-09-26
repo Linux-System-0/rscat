@@ -35,8 +35,23 @@ fn pty_run(cmd: &[String], env: &[(String, String)], comm: Option<&str>, flt: &m
 }
 #[cfg(windows)]
 fn pty_run(cmd: &[String], env: &[(String, String)], _comm: Option<&str>, flt: &mut LolcatFilter, _stop: Option<&std::path::Path>, _watch: bool) -> i32 {
-    let _ = (env, flt);
+    let _ = env;
     pty_windows::run(cmd, flt, _stop)
+}
+
+/// macOS 需要在代理前以调用 shell 的名字重新 exec 自己一次(fastfetch 按父进程
+/// 名判断终端/SHELL)。Linux 走 prctl、Windows 没有 pty 会话,两者都不需要做
+/// 任何事,返回 true 让调用方继续正常流程。
+///
+/// 和 pty_run 一样按平台分发:该函数实现在 pty_unix 里,而 pty_unix 只在
+/// `#[cfg(unix)]` 下编译,直接调用会让 Windows 目标编译失败。
+#[cfg(unix)]
+fn reexec_as(name: &str) -> bool {
+    pty_unix::reexec_as(name)
+}
+#[cfg(windows)]
+fn reexec_as(_name: &str) -> bool {
+    true
 }
 
 struct Opts {
@@ -234,7 +249,29 @@ fn pick_shell() -> shell_detect::Shell {
     shell_detect::detect_or_fallback()
 }
 
+/// 中文 Windows 控制台默认代码页 936(GBK):ConPTY 按 GBK 解码我们的 UTF-8 输出,
+/// 多字节字符被改写(▀→鈸?)、紧邻的 ESC 字节被吞,彩虹/图片序列随机损坏
+/// (表现为"一个字一个色"的跳变与 logo 乱码)。切到 65001 (UTF-8) 后字节按原样解析。
+#[cfg(windows)]
+fn enable_utf8_console() {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn SetConsoleOutputCP(wVersionID: u32) -> i32;
+    }
+    unsafe {
+        SetConsoleOutputCP(65001);
+    }
+}
+
+#[cfg(not(windows))]
+fn enable_utf8_console() {}
+
 fn main() {
+    enable_utf8_console();
+    // macOS:曾以 shell 名 re-exec 过自己的话,这里删掉那个临时可执行文件
+    // (p_comm 在 exec 时已定型,删文件不影响它)。见 reexec_as(pty_unix 实现)。
+    #[cfg(unix)]
+    pty_unix::cleanup_after_reexec();
     let argv: Vec<String> = std::env::args().skip(1).collect();
     // 先用环境语言解析参数(--lang 本身需要在解析后才生效,错误信息用环境语言)
     let env_lang = Lang::detect();
@@ -302,6 +339,17 @@ fn main() {
             eprintln!("{}", t(lang, Msg::ErrNeedUnixPty));
             std::process::exit(127);
         }
+        // macOS:以调用 shell 的名字重新 exec 自己一次(fastfetch 按父进程名
+        // 判断终端/SHELL,见 reexec_as)。必须赶在 session_start 与
+        // title_push 之前 —— exec 保留 PID 但这两步有外部可见副作用,先做会
+        // 在 exec 后重复执行一次。Linux 走 prctl,不需要 exec。
+        {
+            let sh = pick_shell();
+            if !reexec_as(&sh.name()) {
+                eprintln!("{}", t(lang, Msg::ErrExecFailed));
+                std::process::exit(127);
+            }
+        }
         if persist::session_start().is_err() {
             eprintln!("{} {:?}", t(lang, Msg::ErrReadFile), persist::session_marker());
             std::process::exit(1);
@@ -343,6 +391,15 @@ fn main() {
         if !pty_supported() {
             eprintln!("{}", t(lang, Msg::ErrNeedUnixPty));
             std::process::exit(127);
+        }
+        // macOS:同 -a,先以调用 shell 的名字重新 exec 自己(见 reexec_as)。
+        // 放在 title_push 之前,避免 exec 后重复推送一次标题。
+        {
+            let sh = pick_shell();
+            if !reexec_as(&sh.name()) {
+                eprintln!("{}", t(lang, Msg::ErrExecFailed));
+                std::process::exit(127);
+            }
         }
         let out: Box<dyn Write> = Box::new(std::io::stdout().lock());
         let mut flt = make_filter(&o, seed, out);

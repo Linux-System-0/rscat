@@ -86,8 +86,9 @@ pub fn t(lang: Lang, m: Msg) -> &'static str {
     use Msg::*;
     match (lang, m) {
         // ---- 通用 ----
-        // 版本号 v1.1.4-6(升版本时:改 Cargo.toml version + 此处 + 打包脚本)
-        (_, Version) => "rscat v1.1.6-5",
+        // 版本号 1.1.6-5(升版本时:改 Cargo.toml version + 此处 + 打包脚本)
+        // 格式固定为 "rscat <版本>",与验收标准 `rscat --version` 输出一致。
+        (_, Version) => "rscat 1.1.6-5",
         // ---- 错误 ----
         (ZhCn, ErrNeedUnixPty) => "rscat: 运行模式需要 Unix pty 支持,当前平台暂不支持",
         (ZhTw, ErrNeedUnixPty) => "rscat: 執行模式需要 Unix pty 支援,目前平台暫不支援",

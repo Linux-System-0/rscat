@@ -69,7 +69,11 @@ pub fn session_start() -> std::io::Result<()> {
     if let Some(dir) = m.parent() {
         std::fs::create_dir_all(dir)?;
     }
+    #[cfg(unix)]
     let ppid = unsafe { libc::getppid() };
+    // Windows:无 -a 会话(需 ConPTY),此函数实际不会被调到,仅保证可编译
+    #[cfg(windows)]
+    let ppid = 0u32;
     std::fs::write(&m, format!("{} {}", std::process::id(), ppid))?;
     Ok(())
 }
@@ -86,9 +90,15 @@ fn owner_alive(pid: u32) -> bool {
             Err(_) => false,
         }
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(all(unix, not(target_os = "linux")))]
     {
         unsafe { libc::kill(pid as i32, 0) == 0 }
+    }
+    // Windows:没有 -a 会话(需 ConPTY),标记一律视为无主
+    #[cfg(windows)]
+    {
+        let _ = pid;
+        false
     }
 }
 
@@ -112,11 +122,20 @@ pub fn cleanup_stale() {
             continue;
         }
         if let Some(parent) = nums.next() {
-            // 幽灵会话:属主活着,但它的父 shell 已经没了
-            let parent_gone = unsafe { libc::kill(parent as i32, 0) != 0 };
-            if parent_gone {
-                unsafe { libc::kill(owner as i32, libc::SIGHUP) };
-                let _ = std::fs::remove_file(m);
+            #[cfg(unix)]
+            {
+                // 幽灵会话:属主活着,但它的父 shell 已经没了
+                let parent_gone = unsafe { libc::kill(parent as i32, 0) != 0 };
+                if parent_gone {
+                    unsafe { libc::kill(owner as i32, libc::SIGHUP) };
+                    let _ = std::fs::remove_file(m);
+                }
+            }
+            // Windows:无 -a 会话(需 ConPTY),父进程无从谈起,清掉残留标记即可
+            #[cfg(windows)]
+            {
+                let _ = (parent, owner);
+                let _ = std::fs::remove_file(&m);
             }
         }
     }

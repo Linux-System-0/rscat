@@ -1,9 +1,9 @@
-rscat 0.1.0 —— 画像も出せる lolcat(Rust による書き直し)
+rscat 1.1.6-5 —— 画像も出せる lolcat(Rust による書き直し)
 虹アルゴリズムは lolcat 100.0.1 とバイト単位で互換、
 画像パススルーと疑似端末実行モードを追加。
 
 使い方:
-  somecmd | rscat                 フィルタモード:stdin を虹色化(lolcat 相当)
+  somecmd | rscat                 フィルタモード:stdin を虹色化(lolcat 相当;画像セル——自前の色を持つブロック要素——は保持)
   rscat FILE...                   テキストファイルを虹色化
   rscat -e fastfetch              実行モード:pty 内で実行し画像+虹文字を両立
   rscat neko.png [mimi.jpg ...]   画像モード:画像を直接表示+虹色のファイル名
