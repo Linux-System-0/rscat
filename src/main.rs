@@ -309,7 +309,7 @@ fn main() {
         return;
     }
     if o.version {
-        println!("{}", t(lang, Msg::Version));
+        println!("rscat {}", i18n::VERSION);
         return;
     }
     if let Some(sh) = &o.init {
@@ -378,7 +378,7 @@ fn main() {
         let rc = pty_run(&sargv, &senv, Some(&sh.name()), &mut flt, Some(&persist::session_marker()), true);
         flt.finish(std::io::stdout().is_terminal());
         terminal_restore(true);
-        persist::session_stop();
+        persist::session_clear_own();
         eprintln!("{}", t(lang, Msg::SessionExit));
         std::process::exit(rc);
     }

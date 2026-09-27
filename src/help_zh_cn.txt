@@ -1,4 +1,4 @@
-rscat 1.1.6-5 —— 能输出图片的 lolcat(Rust 重写)
+rscat {VERSION} —— 能输出图片的 lolcat(Rust 重写)
 彩虹算法与 lolcat 100.0.1 逐字节一致,另支持图片直通与伪终端运行模式。
 
 用法:
@@ -34,6 +34,7 @@ rscat 附加:
   -h, --help          显示本帮助
   -V, --version       显示版本
 
-说明:管道里出不来图片是 fastfetch 的限制(非 tty 就不发图片),
-请用 rscat -e fastfetch(本体 -e 旗标,无需另装包装命令)。
+说明:管道里出不来图片是 fastfetch 的限制(非 tty 就不发图片)。
+安装包自带的 shell 集成会给 fastfetch 加包装,使 `fastfetch | rscat` 也出图;
+未安装时请用 rscat -e fastfetch(伪终端,本体内置,无需包装)。
 语言:简中/繁中/英文/日文自动跟随系统,也可用 --lang 或 RSCAT_LANG 指定。

@@ -292,8 +292,9 @@ rscat -e fastfetch
 ## 开发
 
 ```bash
-cargo test          # 24 项:彩虹向量、base64、PNG 头、魔数、过滤器、
-                    # PTY(termios + 终端查询代答)
+cargo test          # 28 个单元 + 5 个 CLI 测试:彩虹向量、base64、PNG 头、魔数、
+                    # 过滤器、PTY(termios + 终端查询代答)、BMP/WebP 解码、
+                    # 会话标记、端到端 CLI
 cargo build --release
 ```
 
@@ -303,6 +304,7 @@ src/            main.rs(CLI) rainbow.rs filter.rs image.rs shell_detect.rs
                 help_{en,zh_cn,zh_tw,ja}.txt
 shells/         rscat.{bash,zsh,sh,fish,ps1,cmd} —— --init 的正本,也是
                 Linux/FreeBSD 包在安装时接进你 shell 的内容
+tests/          cli.rs —— 运行编译后二进制的端到端测试
 build/          打包配方 + 各平台交接文档(git 忽略)
 ass/            图片素材
 ```

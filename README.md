@@ -334,8 +334,9 @@ terminal reply can never deadlock.
 ## Development
 
 ```bash
-cargo test          # 24 tests: rainbow vectors, base64, PNG header, magic
-                    # numbers, filter, PTY (termios + query interception)
+cargo test          # 28 unit + 5 CLI tests: rainbow vectors, base64, PNG header,
+                    # magic numbers, filter, PTY (termios + query interception),
+                    # BMP/WebP decode, session markers, end-to-end CLI
 cargo build --release
 ```
 
@@ -345,6 +346,7 @@ src/            main.rs (CLI) rainbow.rs filter.rs image.rs shell_detect.rs
                 help_{en,zh_cn,zh_tw,ja}.txt
 shells/         rscat.{bash,zsh,sh,fish,ps1,cmd} — the --init sources, and what
                 the Linux/FreeBSD packages wire into your shells on install
+tests/          cli.rs — end-to-end tests that run the built binary
 build/          packaging recipes + per-platform hand-off prompts (git-ignored)
 ass/            artwork
 ```
