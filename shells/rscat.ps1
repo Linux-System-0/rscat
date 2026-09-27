@@ -1,4 +1,4 @@
-# rscat: rainbow cat — https://github.com/anomalyco/rscat
+# rscat: rainbow cat — https://github.com/macOS-Terminal/rscat
 # Added by `rscat --init powershell`. Idempotent; append to $PROFILE:
 #   rscat --init powershell >> $PROFILE
 $RscatBin = Join-Path $HOME ".local\bin"

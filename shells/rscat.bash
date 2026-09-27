@@ -1,4 +1,4 @@
-# rscat: rainbow cat — https://github.com/anomalyco/rscat
+# rscat: rainbow cat — https://github.com/macOS-Terminal/rscat
 # Added by `rscat --init bash`. Idempotent, safe to re-source.
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
