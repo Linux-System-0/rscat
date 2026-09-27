@@ -19,7 +19,7 @@ rscat 1.1.6-5 —— 画像も出せる lolcat(Rust による書き直し)
   -d, --duration N  アニメのフレーム数(既定 12)
   -s, --speed F     アニメのフレームレート(既定 20.0)
   -i, --invert      前景/背景の反転
-  -t, --truecolor   24bit カラー強制(既定は COLORTERM で自動判定、他は 256 色)
+  -t, --truecolor   24bit カラーを強制(既定は真彩、COLORTERM に "256" が含まれる場合のみ 256 色)
   -f, --force       stdout が端末でなくても強制着色(既定は素通し、lolcat と同じ)
 
 rscat 追加分:

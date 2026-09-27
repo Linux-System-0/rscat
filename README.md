@@ -58,7 +58,7 @@ picture survives and the text is rainbow.
 Three ways to use it:
 
 ```bash
-rscat logo.png          # image mode: draw a PNG/JPEG/GIF directly
+rscat logo.png          # image mode: draw a PNG/JPEG/GIF/BMP/WebP directly
 some-command | rscat    # filter mode: rainbowize a stream, images intact
 rscat -e fastfetch      # run mode: run a command in a pty, images + rainbow together
 ```
@@ -92,7 +92,7 @@ rscat -e fastfetch      # run mode: run a command in a pty, images + rainbow tog
 | **Picture cells preserved** | Block characters carrying their own colour — how `fastfetch`, `chafa` and friends draw images in a text terminal — pass through untouched. Text, including ASCII-art logos, still gets the rainbow. |
 | **Cross-platform** | One codebase, four platforms: Linux, macOS, FreeBSD, Windows. Native installers and packages for each. |
 | **Run mode** | `rscat -e <command>` — run anything in a pty and get images *and* rainbow text, no wrapper needed, no per-tool flags. |
-| **Image mode** | `rscat logo.png` — display a local image directly (PNG/JPEG/GIF). |
+| **Image mode** | `rscat logo.png` — display a local image directly (PNG/JPEG/GIF/BMP/WebP). |
 | **Rainbow session** | `rscat -a` makes every later command rainbow; `rscat -c` cancels. |
 | **Multilingual** | English / 简体中文 / 繁體中文 / 日本語, follows system `LANG`, or `--lang`. |
 | **Calling-shell detection** | `-e`/`-a` find the real shell in the parent chain, so a fetch tool's SHELL module shows fish/zsh/bash instead of `rscat`. |

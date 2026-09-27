@@ -18,7 +18,7 @@ rscat 1.1.6-5 —— 能輸出圖片的 lolcat(Rust 重寫)
   -d, --duration N  動畫幀數(預設 12)
   -s, --speed F     動畫幀率(預設 20.0)
   -i, --invert      前景/背景反轉
-  -t, --truecolor   強制 24 位色(預設按 COLORTERM 自動偵測,否則 256 色)
+  -t, --truecolor   強制 24 位色(預設真彩;僅當 COLORTERM 含 "256" 時降級為 256 色)
   -f, --force       stdout 非終端時也強制上色(否則原樣直通,同 lolcat)
 
 rscat 附加:

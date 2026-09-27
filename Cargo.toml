@@ -12,7 +12,9 @@ name = "rscat"
 path = "src/main.rs"
 
 [dependencies]
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
+# bmp/webp 与 image.rs 的 sniff_image 保持一致:嗅探认下的格式必须真能解码,
+# 否则 kitty 协议下 `rscat x.bmp` 会走到 as_png 失败。
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "webp"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

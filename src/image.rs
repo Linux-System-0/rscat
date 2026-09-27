@@ -181,9 +181,9 @@ pub fn send_kitty(out: &mut dyn Write, png: &[u8]) {
 pub fn send_iterm(out: &mut dyn Write, data: &[u8], name: &str) {
     let enc_name = base64_encode(name.as_bytes());
     let enc_data = base64_encode(data);
-    let _ = write!(
+    let _ = writeln!(
         out,
-        "\x1b]1337;File=inline=1;size={};preserveAspectRatio=1;name={}:{}\x07\n",
+        "\x1b]1337;File=inline=1;size={};preserveAspectRatio=1;name={}:{}\x07",
         data.len(),
         enc_name,
         enc_data

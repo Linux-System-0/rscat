@@ -50,7 +50,7 @@ my-plot-script.py | rscat
 三种用法:
 
 ```bash
-rscat logo.png          # 图片模式:直接画出 PNG/JPEG/GIF
+rscat logo.png          # 图片模式:直接画出 PNG/JPEG/GIF/BMP/WebP
 some-command | rscat    # 过滤模式:彩虹化输出流,图片不被破坏
 rscat -e fastfetch      # 运行模式:在伪终端里跑命令,图片与彩虹兼得
 ```
@@ -82,7 +82,7 @@ rscat -e fastfetch      # 运行模式:在伪终端里跑命令,图片与彩虹�
 | **图片单元保持原样** | 自带颜色的块元素字符——`fastfetch`、`chafa` 等在文本终端里画图的方式——原样直通。普通文字(含 ASCII art logo)照常上彩虹。 |
 | **跨平台** | 一套代码,四个平台:Linux、macOS、FreeBSD、Windows,各有原生安装包。 |
 | **运行模式** | `rscat -e <命令>`——在伪终端里跑任何东西,**图片与彩虹字兼得**,无需包装脚本、无需每个工具单独加旗标。 |
-| **图片模式** | `rscat logo.png`——直接显示本地图片(PNG/JPEG/GIF)。 |
+| **图片模式** | `rscat logo.png`——直接显示本地图片(PNG/JPEG/GIF/BMP/WebP)。 |
 | **彩虹会话** | `rscat -a` 之后所有命令都是彩虹输出;`rscat -c` 取消。 |
 | **多语言** | 英文 / 简体中文 / 繁体中文 / 日文,跟随系统 `LANG`,也可 `--lang` 指定。 |
 | **调用 shell 检测** | `-e`/`-a` 能从父进程链里找到真实 shell,fetch 工具的 SHELL 模块显示 fish/zsh/bash 本尊而非 `rscat`。 |

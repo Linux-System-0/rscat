@@ -19,7 +19,7 @@ Options (same as lolcat):
   -d, --duration N  animation frames (default 12)
   -s, --speed F     animation frame rate (default 20.0)
   -i, --invert      foreground/background invert
-  -t, --truecolor   force 24-bit color (default: auto via COLORTERM, else 256 colors)
+  -t, --truecolor   force 24-bit color (default truecolor; COLORTERM containing "256" downgrades to 256 colors)
   -f, --force       force color even when stdout is not a tty (else passthrough, like lolcat)
 
 rscat extras:
